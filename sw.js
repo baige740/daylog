@@ -1,5 +1,5 @@
-const CACHE='daylog-shell-v9';
-const files=['./','index.html','app.js','article.js','boot.js','auth.js','auth.css','icons.js','styles.css','journal.js','market.js','market.json','article.html','article.css','writing.js','forest.webp','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png'];
+const CACHE='daylog-shell-v12';
+const files=['./','index.html','app.js','article.js','boot.js','auth.js','auth.css','icons.js','styles.css','extras.js','extras.css','media.js','insights.js','journal.js','market.js','market.json','article.html','article.css','writing.js','forest.webp','lxgwwenkai-common.woff2','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(files)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil((async()=>{
  const keys=await caches.keys();
