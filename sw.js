@@ -1,4 +1,4 @@
-const CACHE='daylog-shell-v6';
+const CACHE='daylog-shell-v7';
 const files=['./','index.html','app.js','icons.js','styles.css','journal.js','market.js','market.json','article.html','article.js','article.css','writing.js','lxgwwenkai-lite-gb2312.woff2','forest.webp','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(files)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('daylog-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));

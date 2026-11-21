@@ -51,7 +51,7 @@ function renderCal(){
 }
 function empty(title,hint){return '<div class="feed-empty"><span class="empty-icon">'+icon('journal')+'</span><div><b>'+title+'</b><p>'+hint+'</p></div></div>'}
 function articleLink(r,mode,content,cls){
-  return '<a class="'+cls+'" aria-label="'+(mode==='edit'?'编辑长文':'阅读全文')+'" href="article.html#'+mode+'/'+r.id+'" target="_blank" rel="noopener">'+content+'</a>'
+  return '<a class="'+cls+'" aria-label="'+(mode==='edit'?'在当前页编辑长文':'在当前页阅读全文')+'" href="article.html#'+mode+'/'+r.id+'">'+content+'</a>'
 }
 function entry(r){
   const isArticle=r.mode==='article';
@@ -72,7 +72,7 @@ function renderArticleDrafts(){
   }
   drafts.sort((a,b)=>b.changed-a.changed);
   const list=$('#article-drafts');list.hidden=!drafts.length;
-  list.innerHTML=drafts.map(d=>'<a href="article.html#edit/'+d.id+'" target="_blank" rel="noopener">'+icon('pen')+'继续草稿 · '+esc(d.title||'未命名长文')+'</a>').join('')
+  list.innerHTML=drafts.map(d=>'<a href="article.html#edit/'+d.id+'">'+icon('pen')+'继续草稿 · '+esc(d.title||'未命名长文')+'</a>').join('')
 }
 function renderRecords(){
   activeDate=dateKey(new Date());records=entries();const today=records.filter(r=>dateKey(r.at)===activeDate);
