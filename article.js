@@ -151,7 +151,12 @@ $('#smart').onclick=()=>{smart=!smart;localStorage.setItem('daylog:smart',smart?
 body.addEventListener('paste',pastePlain);body.addEventListener('drop',e=>e.preventDefault());
 document.addEventListener('compositionstart',()=>{composing=true;compositionText='';clearTimeout(compositionInkTimer)},true);
 document.addEventListener('compositionupdate',e=>{compositionText=e.data||compositionText},true);
-document.addEventListener('compositionend',e=>{composing=false;if(e.data)scheduleCompositionInk(e.data)},true);
+document.addEventListener('compositionend',e=>{
+  composing=false;
+  if(!body.contains(e.target))return;
+  smartType(body,smart);modified();
+  if(e.data)scheduleCompositionInk(e.data)
+},true);
 body.oninput=e=>{
   if(e.isComposing||composing)return;
   smartType(body,smart);modified();

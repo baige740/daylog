@@ -2,6 +2,7 @@ import {smartType,pastePlain} from './writing.js';
 import {icon,paintIcons} from './icons.js';
 import {startMarket} from './market.js';
 import {types,escapeHTML as esc,cleanHTML,plain,formatHTML,dateKey,entries,write,remove,create,validEntry,articleDraftPrefix,articleName} from './journal.js';
+import {consumeRecoveryNotice,lockNow,openPasswordSettings} from './auth.js';
 const $=s=>document.querySelector(s);
 const editor=$('#editor'),dialog=$('#dialog'),dialogBody=$('#dialog-content');
 const tabs=[['note','dotpen'],['trade','activity'],['reflect','bulb'],['quote','quote']];
@@ -150,12 +151,14 @@ function openSearch(){
 }
 $('#search-open').onclick=openSearch;
 function openBackup(){
-  openDialog('我的手记本','<p>这台设备的浏览器中保存了 '+records.length+' 条记录。导出备份后，可以在另一台设备上导入，已有记录会自动跳过。</p><div class="backup-row"><button class="primary" id="export">'+icon('download')+'导出备份</button><button class="secondary" id="import">'+icon('upload')+'导入备份</button><input type="file" id="backup-file" hidden accept=".json,application/json"></div><p>手机上可从浏览器菜单添加到主屏幕，随时打开记录。</p><div id="backup-status" role="status"></div>');
+  openDialog('我的手记本','<p>这台设备的浏览器中保存了 '+records.length+' 条记录。导出备份后，可以在另一台设备上导入，已有记录会自动跳过。</p><div class="backup-row"><button class="primary" id="export">'+icon('download')+'导出备份</button><button class="secondary" id="import">'+icon('upload')+'导入备份</button><input type="file" id="backup-file" hidden accept=".json,application/json"></div><p>访问密码只在本机校验，不会随备份上传。</p><div class="backup-row"><button class="secondary" id="change-password">修改访问密码</button><button class="secondary" id="lock-now">立即锁定</button></div><p>手机上可从浏览器菜单添加到主屏幕，随时打开记录。</p><div id="backup-status" role="status"></div>');
   $('#export').onclick=()=>{const blob=new Blob([JSON.stringify({app:'daylog',version:1,entries:entries()},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='日迹-'+dateKey(new Date())+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
   $('#import').onclick=()=>$('#backup-file').click();$('#backup-file').onchange=async e=>{const f=e.target.files[0];if(!f)return;let added=0;
     try{const data=JSON.parse(await f.text());if(data.app!=='daylog'||data.version!==1||!Array.isArray(data.entries))throw Error();const incoming=data.entries.map(validEntry),existing=new Set(entries().map(r=>r.id));for(const r of incoming){if(existing.has(r.id))continue;write(r);existing.add(r.id);added++}$('#backup-status').textContent='导入 '+added+' 条，跳过 '+(incoming.length-added)+' 条重复记录。'}
     catch{$('#backup-status').textContent='导入未完成，已写入 '+added+' 条。请检查备份格式和本机存储空间。'}renderRecords();e.target.value=''
   }
+  $('#change-password').onclick=()=>{dialog.close();openPasswordSettings()};
+  $('#lock-now').onclick=lockNow;
 }
 $('#profile').onclick=openBackup;
 document.addEventListener('click',e=>{
@@ -175,5 +178,6 @@ window.addEventListener('storage',e=>{if(!e.key||e.key.startsWith('daylog:entry:
 function changeDay(){if(activeDate!==dateKey(new Date())){headerDate();renderRecords()}}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)changeDay()});setInterval(changeDay,30000);
 paintIcons();headerDate();renderButtons();const lastTab=localStorage.getItem('daylog:tab');selectTab(tabs.some(([t])=>t===lastTab)?lastTab:'note',false);navigate('home');startMarket(openDialog,toast);
+if(consumeRecoveryNotice())toast('已使用找回词语进入，请在“我的手记本”中修改访问密码');
 if('serviceWorker' in navigator&&window.isSecureContext)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
