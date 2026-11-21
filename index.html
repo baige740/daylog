@@ -5,7 +5,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="日迹">
 <title>日迹 Daylog · 今日总览</title>
 <script>document.documentElement.classList.add("daylog-auth-checking")</script>
-<link rel="icon" href="icon.svg"><link rel="apple-touch-icon" href="icon-192.png"><link rel="manifest" href="manifest.webmanifest"><link rel="preload" href="forest.webp" as="image"><link rel="preload" href="lxgwwenkai-common.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="styles.css?v=12"><link rel="stylesheet" href="extras.css?v=12"><link rel="stylesheet" href="auth.css?v=1"></head>
+<style>html{background:#f6f8f5}html.daylog-auth-checking{background:#edf4ee}</style>
+<link rel="icon" href="icon.svg"><link rel="apple-touch-icon" href="icon-192.png"><link rel="manifest" href="manifest.webmanifest"><link rel="preload" href="forest.webp" as="image"><link rel="preload" href="lxgwwenkai-common.woff2" as="font" type="font/woff2" crossorigin><link rel="prefetch" href="article.html"><link rel="prefetch" href="article.css"><link rel="prefetch" href="article.js"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="extras.css"><link rel="stylesheet" href="auth.css?v=1"></head>
 <body>
 <button id="veil" aria-label="关闭导航" hidden></button>
 <aside id="sidebar"><div class="brand"><span class="brand-icon" data-i="journal"></span><b>日迹</b><span class="brand-en">Daylog</span></div>
@@ -24,4 +25,4 @@
 <section id="archive" hidden></section><section id="stats" hidden></section></main></div>
 <nav id="mobile-nav" aria-label="移动端导航"><button type="button" data-view="home"><span data-i="grid"></span><small>今日</small></button><button type="button" data-view="history"><span data-i="history"></span><small>时间线</small></button><button type="button" data-view="stats"><span data-i="chart"></span><small>统计</small></button><button type="button" id="mobile-profile"><span data-i="user"></span><small>我的</small></button></nav>
 <dialog id="dialog"><div class="dialog-head"><h2 id="dialog-title"></h2><button class="icon-btn" id="dialog-close" aria-label="关闭" data-i="x"></button></div><div id="dialog-content"></div></dialog><div id="toast" role="status"></div>
-<script type="module" src="boot.js?v=12"></script></body></html>
+<script type="module" src="boot.js"></script></body></html>

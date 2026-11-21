@@ -469,5 +469,5 @@ paintIcons();headerDate();renderButtons();const lastTab=localStorage.getItem('da
 $('#mobile-profile').onclick=openBackup;
 cleanupUnreferencedMedia(entries(),storedDrafts()).catch(()=>null);
 if(consumeRecoveryNotice())toast('已使用找回词语进入，请在“我的手记本”中修改访问密码');
-if('serviceWorker' in navigator&&window.isSecureContext)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+if('serviceWorker' in navigator&&window.isSecureContext)navigator.serviceWorker.register('./sw.js').then(r=>r.update()).catch(()=>{});
 
