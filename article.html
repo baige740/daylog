@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#175b49"><title>深度记录 · 日迹</title><link rel="icon" href="icon.svg"><link rel="preload" href="lxgwwenkai-lite-gb2312.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="article.css"></head>
+<body class="article-page">
+<header class="writer-bar">
+  <a class="writer-home" href="./" aria-label="回到日迹首页"><span class="brand-icon" data-i="journal"></span><b>日迹</b></a><span class="writer-path" id="mode-name">深度记录</span>
+  <div class="writer-actions"><span id="status" role="status" aria-live="polite">本机草稿</span><button id="commit" class="primary">保存文章</button><button id="edit" class="primary" hidden>继续编辑</button></div>
+</header>
+<main class="paper">
+  <section id="composer"><div class="article-meta"><label>分类<select id="category"><option value="note">随手记</option><option value="trade">炒股心得</option><option value="reflect">反思</option><option value="quote">名人名言</option></select></label><label>记录时间<input id="when" type="datetime-local" required></label></div>
+  <input id="title" aria-label="文章标题" placeholder="给这一刻起个标题" autocomplete="off">
+  <div class="writer-tools" role="group" aria-label="文章排版"><button class="text-format" data-format="heading" title="小标题" aria-label="小标题">H₃</button><button class="text-format" data-format="bold" title="加粗" aria-label="加粗"><b>B</b></button><button class="text-format" data-format="italic" title="斜体" aria-label="斜体"><em>I</em></button><button data-format="list" data-i="list" title="项目列表" aria-label="项目列表"></button><button data-format="quote" data-i="quote" title="引用" aria-label="引用"></button><button id="smart" aria-pressed="true" title="自动加粗段首和 **重点**"><span data-i="sparkles"></span>智能排版</button><span id="count">0 字</span></div>
+  <div id="body" class="article-prose" contenteditable="true" role="textbox" aria-multiline="true" aria-label="文章正文" data-placeholder="慢慢写，第一句话不必完美。" spellcheck="false"></div>
+  <footer class="article-foot"><a href="./">回到首页</a><div class="article-foot-actions"><span class="save-shortcut">Ctrl / ⌘ + Enter 保存</span><button id="discard" hidden>舍弃草稿</button></div></footer></section>
+  <article id="reader" hidden><div id="read-meta" class="article-meta"></div><h1 id="read-title"></h1><div id="read-body" class="article-prose"></div><footer class="article-foot"><a href="./">回到首页</a></footer></article>
+  <section id="missing" hidden><h1>找不到这篇文章</h1><p>文章保存在创建它的浏览器中。</p><a href="./">回到首页</a></section>
+</main>
+<span id="ink-cue" class="ink-cue" aria-hidden="true"></span>
+<dialog id="confirm"><h2>舍弃这份草稿？</h2><p>已保存到时间线的文章会保留。</p><div class="dialog-actions"><button class="secondary" id="keep">继续写</button><button class="secondary danger" id="drop">舍弃草稿</button></div></dialog>
+<script type="module" src="article.js"></script></body></html>
