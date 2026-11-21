@@ -3,9 +3,9 @@ import { requireLogin } from "./auth.js";
 async function startDaylog() {
   await requireLogin();
   if (document.body.classList.contains("article-page")) {
-    await import("./article.js?v=9");
+    await import("./article.js");
   } else {
-    await import("./app.js?v=9");
+    await import("./app.js");
   }
 }
 

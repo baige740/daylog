@@ -183,9 +183,8 @@ $('#drop').onclick=()=>{
 document.addEventListener('keydown',e=>{if(editing&&(e.ctrlKey||e.metaKey)&&e.key==='Enter'&&!e.isComposing){e.preventDefault();saveArticle()}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)persistDraft()});
 window.addEventListener('pagehide',persistDraft);
-window.addEventListener('beforeunload',e=>{if(!persistDraft()){e.preventDefault();e.returnValue=''}});
 window.addEventListener('hashchange',()=>{if(persistDraft())start()});
 window.addEventListener('storage',e=>{if(!editing&&e.key==='daylog:entry:'+id)showReader(readRecord())});
 start();
-if('serviceWorker' in navigator&&window.isSecureContext)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+if('serviceWorker' in navigator&&window.isSecureContext)navigator.serviceWorker.register('./sw.js').then(r=>r.update()).catch(()=>{});
 
