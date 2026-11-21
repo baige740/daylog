@@ -4,6 +4,8 @@ async function startDaylog() {
   await requireLogin();
   if (document.body.classList.contains("article-page")) {
     await import("./article.js");
+  } else if (document.body.classList.contains("fish-page")) {
+    await import("./fish.js");
   } else {
     await import("./app.js");
   }
