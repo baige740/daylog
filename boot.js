@@ -1,11 +1,19 @@
 import { requireLogin } from "./auth.js";
 
+if (
+  "serviceWorker" in navigator
+  && window.isSecureContext
+  && document.body.classList.contains("fish-page")
+) {
+  navigator.serviceWorker.register("./sw.js").then(registration => registration.update()).catch(() => {});
+}
+
 async function startDaylog() {
   await requireLogin();
   if (document.body.classList.contains("article-page")) {
     await import("./article.js");
   } else if (document.body.classList.contains("fish-page")) {
-    await import("./fish.js?v=20261122c");
+    await import("./fish.js?v=20261123a");
   } else {
     await import("./app.js");
   }

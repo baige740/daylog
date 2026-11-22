@@ -1,4 +1,4 @@
-const CACHE='daylog-shell-v23';
+const CACHE='daylog-shell-v24';
 const files=['./','index.html','fish.html','fish.js','fish-static-api.js','fish.css','fish-avatar.webp','app.js','article.js','boot.js','version.js','auth.js','auth.css','icons.js','styles.css','extras.js','extras.css','media.js','insights.js','journal.js','market.js','market.json','article.html','article.css','writing.js','forest.webp','lxgwwenkai-common.woff2','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(files)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('daylog-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
@@ -8,7 +8,7 @@ self.addEventListener('fetch',event=>{
  if(url.pathname==='/api'||url.pathname.startsWith('/api/')||url.pathname.endsWith('/sw.js'))return;
  const scope=new URL(self.registration.scope).pathname;
  if(!url.pathname.startsWith(scope))return;
- if(url.searchParams.get('v')==='20261122c'&&/\/(boot|fish|fish-static-api)\.js$/.test(url.pathname)){
+ if(url.searchParams.get('v')==='20261123a'&&/\/(boot|fish|fish-static-api)\.js$/.test(url.pathname)){
    event.respondWith((async()=>{
      const cache=await caches.open(CACHE);
      const cached=await cache.match(event.request);

@@ -1,4 +1,5 @@
 const SETTINGS_KEY = "daylog:fish:settings:v1";
+const ROLE_KEY = "daylog:fish:role:v1";
 const TURNS_KEY = "daylog:fish:turns:v1";
 const MEMORIES_KEY = "daylog:fish:memories:v1";
 const DEFAULT_MODEL_URL = "https://api.deepseek.com/v1/chat/completions";
@@ -7,6 +8,8 @@ const DEFAULT_ROLE = "你叫大肥鱼，偶尔自称小鲸鱼。你是主人的�
 const SENSITIVE = /(?:sk-[a-z0-9_-]{12,}|api[_ -]?key|access[_ -]?token|secret|password|密码|口令|身份证|银行卡|信用卡|护照号|cvv|私钥|gh[pousr]_[a-z0-9]{20,}|github_pat_[a-z0-9_]{20,}|eyj[a-z0-9_-]{10,}\.[a-z0-9_-]{10,}\.[a-z0-9_-]{10,}|akia[0-9a-z]{16}|\b\d{17}[\dx]\b|\b(?:\d[ -]?){15,19}\b)/i;
 
 let libraryPromise = null;
+let loadedLibrary = null;
+let libraryError = null;
 let extractionPromise = null;
 
 async function requestText(url, options, timeoutMs, timeoutMessage, networkMessage) {
@@ -40,12 +43,26 @@ function writeJson(key, value) {
   }
 }
 
+function savedRole() {
+  const explicit = readJson(ROLE_KEY, "");
+  if (typeof explicit === "string" && explicit.trim()) return explicit;
+  const saved = readJson(SETTINGS_KEY, {});
+  const role = typeof saved?.role === "string" ? saved.role : "";
+  if (!role.trim()) return "";
+  try {
+    localStorage.setItem(ROLE_KEY, JSON.stringify(role));
+  } catch {
+    // The role can still be used for this load when storage is unavailable.
+  }
+  return role;
+}
+
 function settings() {
   const saved = readJson(SETTINGS_KEY, {});
   let modelName = saved.modelName === undefined ? DEFAULT_MODEL_NAME : String(saved.modelName || "");
   if (modelName === "deepseek-v4-flash") modelName = DEFAULT_MODEL_NAME;
   return {
-    role: typeof saved.role === "string" ? saved.role : "",
+    role: savedRole(),
     modelUrl: saved.modelUrl === undefined ? DEFAULT_MODEL_URL : String(saved.modelUrl || ""),
     modelName,
     modelKey: typeof saved.modelKey === "string" ? saved.modelKey : "",
@@ -105,23 +122,26 @@ function writeMemories(memories) {
 }
 
 async function loadLibrary(force = false) {
+  if (!force && loadedLibrary) return loadedLibrary;
   if (force || !libraryPromise) {
     const target = new URL("fish-library.json", location.href);
     if (force) target.searchParams.set("refresh", String(Date.now()));
+    libraryError = null;
     libraryPromise = requestText(target.href, {
       cache: force ? "no-store" : "default",
       credentials: "same-origin",
-    }, 8000, "资料加载超时。", "资料下载失败。").then(({ response, body }) => {
+    }, 45000, "资料加载超时，请点「重新加载资料」再试。", "资料下载失败，请检查网络后点「重新加载资料」再试。").then(({ response, body }) => {
       if (!response.ok) throw new Error("资料文件加载失败，请刷新页面后重试。");
       const value = JSON.parse(body);
       if (!value || !Array.isArray(value.passages)) {
         throw new Error("资料文件格式不正确。");
       }
+      loadedLibrary = value;
       return value;
     }).catch(error => {
+      libraryError = error;
       libraryPromise = null;
-      if (force) throw error;
-      return { passages: [], unavailable: true };
+      throw error;
     });
   }
   return libraryPromise;
@@ -519,17 +539,33 @@ function maybeExtractMemory(question, turnId) {
   }, 0);
 }
 
-function statePayload(library) {
+function libraryPayload(library) {
+  const passages = Array.isArray(library?.passages) ? library.passages : [];
+  const files = Array.isArray(library?.files) ? library.files : [];
   const current = settings();
-  const passages = Array.isArray(library.passages) ? library.passages : [];
-  const files = Array.isArray(library.files) ? library.files : [];
   return {
     role: current.role || library.role || DEFAULT_ROLE,
-    updated: library.generated || "",
+    updated: library?.generated || "",
     count: passages.length,
     file_count: files.length,
     passage_count: passages.length,
-    library_unavailable: library.unavailable === true,
+    library_loading: false,
+    library_unavailable: false,
+    server_managed: false,
+    static_mode: true,
+  };
+}
+
+function statePayload() {
+  const current = settings();
+  return {
+    role: current.role || DEFAULT_ROLE,
+    updated: loadedLibrary?.generated || "",
+    count: loadedLibrary?.passages?.length || 0,
+    file_count: loadedLibrary?.files?.length || 0,
+    passage_count: loadedLibrary?.passages?.length || 0,
+    library_loading: !loadedLibrary && !libraryError,
+    library_unavailable: !loadedLibrary && Boolean(libraryError),
     model: Boolean(current.modelUrl && current.modelName && current.modelKey),
     model_url: current.modelUrl,
     model_name: current.modelName,
@@ -553,9 +589,9 @@ async function chat(payload, library) {
   const deep = payload?.deep === true;
   const web = payload?.web === true;
   const searchAvailable = web && isDeepSeek(current.modelUrl);
-  const passages = relevantPassages(library.passages, question);
+  const passages = relevantPassages(library?.passages || [], question);
   const context = passages.map(item => `《${item.name}》\n${item.body}`).join("\n\n");
-  const system = (current.role || library.role || DEFAULT_ROLE)
+  const system = (current.role || library?.role || DEFAULT_ROLE)
     + `\n\n当前时间：${beijingLabel()}（北京时间）。`
     + (searchAvailable
       ? "本轮已启用 DeepSeek 官方服务端联网搜索。涉及实时新闻、行情、价格或最新事件时，先搜索核实，再按来源日期说明结论；来源冲突时明确写出分歧。"
@@ -651,25 +687,36 @@ export function createStaticApi() {
     path = String(path || "");
     switch (path) {
       case "/state": {
-        return statePayload(await loadLibrary());
+        const currentState = statePayload();
+        loadLibrary().catch(() => {});
+        return currentState;
+      }
+      case "/library": {
+        return libraryPayload(await loadLibrary(payload?.refresh === true));
       }
       case "/chat": {
-        return chat(payload, await loadLibrary());
+        let library = null;
+        try {
+          library = await loadLibrary();
+        } catch {
+          // The model can still answer when the optional material snapshot fails.
+        }
+        return chat(payload, library);
       }
       case "/role": {
         const role = String(payload?.text || "").trim();
         if (!role || role.length > 4000) throw new Error("角色设定需要 1 至 4000 字。");
         const current = settings();
         current.role = role;
+        writeJson(ROLE_KEY, role);
         saveSettings(current);
-        return true;
+        return { role };
       }
       case "/model": {
         return await saveModel(payload);
       }
       case "/refresh": {
-        await loadLibrary(true);
-        return true;
+        return libraryPayload(await loadLibrary(true));
       }
       case "/import": {
         throw new Error("GitHub Pages 静态版不支持手机上传到远端。请把 TXT/Markdown 放进资料目录，重新生成 fish-library.json 后发布。");

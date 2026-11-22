@@ -1,9 +1,28 @@
 import {appVersion} from './version.js';
-import { createStaticApi } from './fish-static-api.js?v=20261122c';
+import { createStaticApi } from './fish-static-api.js?v=20261123a';
 
 const byId = id => document.getElementById(id);
 const versionLabel = byId('app-version');
 if (versionLabel) versionLabel.textContent = appVersion;
+function localSavedRole() {
+  try {
+    const direct = JSON.parse(localStorage.getItem('daylog:fish:role:v1') || '""');
+    if (typeof direct === 'string' && direct.trim()) return direct;
+    const settings = JSON.parse(localStorage.getItem('daylog:fish:settings:v1') || '{}');
+    return typeof settings?.role === 'string' ? settings.role : '';
+  } catch {
+    return '';
+  }
+}
+let roleDirty = false;
+const roleInput = byId('role');
+const initialRole = localSavedRole();
+if (initialRole) roleInput.value = initialRole;
+roleInput.addEventListener('input', () => { roleDirty = true; });
+function showFallbackRole(role) {
+  if (roleDirty || localSavedRole() || typeof role !== 'string' || !role.trim()) return;
+  roleInput.value = role;
+}
 const viewport = window.visualViewport;
 if (viewport) {
   // Mobile keyboards can resize the visual viewport without changing 100dvh.
@@ -285,8 +304,12 @@ async function sendText(text) {
 function library(data) {
   const updated = (data.updated || '').slice(0,16).replace('T',' ');
   if (staticMode) {
+    if (data.library_loading) {
+      byId('library').textContent = '资料正在后台加载，聊天记录和角色已经恢复。';
+      return;
+    }
     if (data.library_unavailable) {
-      byId('library').textContent = '资料暂未加载，仍可聊天。刷新页面可重试。';
+      byId('library').textContent = '资料暂未加载，仍可聊天。点「重新加载资料」可重试。';
       return;
     }
     const files = Number(data.file_count) || 0;
@@ -295,6 +318,29 @@ function library(data) {
     return;
   }
   byId('library').textContent = data.count + ' 份资料 · 最近同步 ' + updated;
+}
+async function refreshLibraryStatus(force = false) {
+  if (!staticMode) return;
+  const button = byId('sync');
+  if (force) {
+    button.disabled = true;
+    button.textContent = '正在加载…';
+    byId('feedback').textContent = '正在重新下载资料，聊天记录和角色不会受影响…';
+    byId('library').textContent = '资料正在后台加载，聊天记录和角色已经恢复。';
+  }
+  try {
+    const data = await api('/library', force ? {refresh:true} : {});
+    Object.assign(stateData, data);
+    library(data);
+    showFallbackRole(data.role);
+    if (force) byId('feedback').textContent = '资料已重新加载，可以继续检索。';
+  } catch (error) {
+    byId('library').textContent = '资料暂未加载，仍可聊天。点「重新加载资料」可重试。';
+    if (force) byId('feedback').textContent = error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = '重新加载资料';
+  }
 }
 function renderModel(data, note) {
   byId('model-url').value = data.model_url || '';
@@ -390,7 +436,7 @@ async function loadState(renderTurns = true) {
     stateData = data;
     updateMode();
     byId('presence').textContent = presenceText();
-    byId('role').value = data.role;
+    showFallbackRole(data.role);
     library(data);
     renderModel(data);
     renderMemoryPanel(data);
@@ -398,6 +444,7 @@ async function loadState(renderTurns = true) {
       data.turns.forEach(turn);
       scrollThread();
     }
+    if (staticMode) refreshLibraryStatus();
     byId('send').disabled = staticMode && !data.model;
     if (staticMode && !data.model && !keyPrompted) {
       keyPrompted = true;
@@ -599,8 +646,14 @@ async function manage(action, success) {
     controls.forEach(control => control.disabled = false);
   }
 }
-byId('save').onclick = () => manage(() => api('/role',{text:byId('role').value}), '角色已保存');
-byId('sync').onclick = () => manage(() => api('/refresh',{}), '资料已同步');
+byId('save').onclick = () => manage(async () => {
+  const result = await api('/role',{text:byId('role').value});
+  roleDirty = false;
+  return result;
+}, '角色已保存');
+byId('sync').onclick = () => staticMode
+  ? refreshLibraryStatus(true)
+  : manage(() => api('/refresh',{}), '资料已同步');
 byId('files').onchange = () => manage(async () => {
   for (const file of byId('files').files) {
     if (file.size > 7000000) throw Error(file.name + ' 超过 7 MB，请拆分后导入。');
@@ -612,4 +665,9 @@ byId('files').onchange = () => manage(async () => {
 buildTray();
 setDeep(deepEnabled);
 setWeb(webEnabled);
+if (staticMode) {
+  byId('sync').hidden = false;
+  byId('sync').disabled = false;
+  byId('sync').textContent = '重新加载资料';
+}
 loadState();
