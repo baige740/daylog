@@ -8,12 +8,8 @@ const textEncoder = new TextEncoder();
 let memoryUnlocked = false;
 
 function bypassLocalGate() {
-  const hostname = location.hostname.toLowerCase();
-  if (hostname === "baige740.github.io" || hostname === "chatgpt.site" || hostname.endsWith(".chatgpt.site")) {
-    return true;
-  }
   const params = new URLSearchParams(location.search);
-  if (["127.0.0.1", "localhost"].includes(hostname) && params.has("static")) {
+  if (["127.0.0.1", "localhost"].includes(location.hostname.toLowerCase()) && params.has("static")) {
     return true;
   }
   return document.body.classList.contains("fish-page") && params.has("static");

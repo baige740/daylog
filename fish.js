@@ -1,5 +1,5 @@
 import {appVersion} from './version.js';
-import { createStaticApi } from './fish-static-api.js?v=20261122b';
+import { createStaticApi } from './fish-static-api.js?v=20261122c';
 
 const byId = id => document.getElementById(id);
 const versionLabel = byId('app-version');

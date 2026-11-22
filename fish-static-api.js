@@ -150,16 +150,58 @@ function skipMaterialSearch(question) {
   ]).has(compact);
 }
 
+function compactMaterialText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^0-9a-z\u3400-\u9fff]+/g, "");
+}
+
+function queryFragmentGroups(question) {
+  const query = compactMaterialText(question).slice(0, 120);
+  const groups = [];
+  for (let length = Math.min(12, query.length); length >= 4; length -= 1) {
+    const fragments = new Set();
+    for (let start = 0; start + length <= query.length; start += 1) {
+      fragments.add(query.slice(start, start + length));
+    }
+    groups.push([...fragments]);
+  }
+  return groups;
+}
+
 function relevantPassages(passages, question) {
   if (skipMaterialSearch(question)) return [];
-  const query = question.toLowerCase().replace(/\s+/g, "");
-  const terms = tokens(question).filter(term => term.length >= 2 || /^[a-z0-9]+$/.test(term));
+  const terms = tokens(question)
+    .filter(term => term.length >= 2 || /^[a-z0-9]+$/.test(term))
+    .slice(0, 64);
+  if (!terms.length) return [];
+  const documents = passages.map(passage => ({
+    source: passage,
+    name: compactMaterialText(passage.name),
+    body: compactMaterialText(passage.body),
+  })).filter(item => item.body);
+  const documentCount = documents.length;
+  const averageLength = documents.reduce((total, item) => total + item.body.length, 0) / Math.max(1, documentCount);
+  const documentFrequency = new Map(terms.map(term => [
+    term,
+    documents.reduce((count, item) => count + (item.body.includes(term) ? 1 : 0), 0),
+  ]));
+  const inverseFrequency = new Map(terms.map(term => [
+    term,
+    1 + Math.log((documentCount + 1) / (documentFrequency.get(term) + 1)),
+  ]));
+  const fragmentGroups = queryFragmentGroups(question);
   const scored = [];
-  for (const passage of passages) {
-    const body = String(passage.body || "").toLowerCase();
-    const name = String(passage.name || "").toLowerCase();
-    if (!body) continue;
-    let score = query.length >= 3 && body.includes(query) ? 40 : 0;
+  for (const { source, name, body } of documents) {
+    let longestMatch = 0;
+    for (const group of fragmentGroups) {
+      if (group.some(fragment => body.includes(fragment))) {
+        longestMatch = group[0].length;
+        break;
+      }
+    }
+    let score = longestMatch >= 4 ? longestMatch * longestMatch * 1.2 : 0;
+    const lengthFactor = Math.min(1, averageLength / Math.max(averageLength, body.length));
     for (const term of terms) {
       let count = 0;
       let at = body.indexOf(term);
@@ -167,10 +209,13 @@ function relevantPassages(passages, question) {
         count += 1;
         at = body.indexOf(term, at + term.length);
       }
-      if (count) score += count * (2 + Math.min(4, term.length - 2));
-      if (name.includes(term)) score += 8;
+      if (count) {
+        const weight = inverseFrequency.get(term);
+        score += (1 + Math.log(count)) * (1 + Math.min(4, term.length - 2)) * weight * lengthFactor;
+      }
+      if (name.includes(term)) score += 3 * inverseFrequency.get(term);
     }
-    if (score > 0) scored.push({ score, name: passage.name, body: passage.body });
+    if (score > 0) scored.push({ score, name: source.name, body: source.body });
   }
   scored.sort((left, right) => right.score - left.score);
   return scored.slice(0, 5);
