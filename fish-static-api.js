@@ -9,6 +9,20 @@ const SENSITIVE = /(?:sk-[a-z0-9_-]{12,}|api[_ -]?key|access[_ -]?token|secret|p
 let libraryPromise = null;
 let extractionPromise = null;
 
+async function requestText(url, options, timeoutMs, timeoutMessage, networkMessage) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    const body = await response.text();
+    return { response, body };
+  } catch {
+    throw new Error(controller.signal.aborted ? timeoutMessage : networkMessage);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function readJson(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
@@ -94,19 +108,20 @@ async function loadLibrary(force = false) {
   if (force || !libraryPromise) {
     const target = new URL("fish-library.json", location.href);
     if (force) target.searchParams.set("refresh", String(Date.now()));
-    libraryPromise = fetch(target.href, {
+    libraryPromise = requestText(target.href, {
       cache: force ? "no-store" : "default",
       credentials: "same-origin",
-    }).then(async response => {
+    }, 8000, "资料加载超时。", "资料下载失败。").then(({ response, body }) => {
       if (!response.ok) throw new Error("资料文件加载失败，请刷新页面后重试。");
-      const value = await response.json();
+      const value = JSON.parse(body);
       if (!value || !Array.isArray(value.passages)) {
         throw new Error("资料文件格式不正确。");
       }
       return value;
     }).catch(error => {
       libraryPromise = null;
-      throw error;
+      if (force) throw error;
+      return { passages: [], unavailable: true };
     });
   }
   return libraryPromise;
@@ -291,33 +306,22 @@ function modelsEndpoint(endpoint) {
 
 async function testDeepSeekModel(current, key) {
   const target = modelsEndpoint(current.modelUrl);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20000);
-  let response;
-  try {
-    response = await fetch(target, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${key}` },
-      cache: "no-store",
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (error?.name === "AbortError") throw new Error("测试模型超时，请稍后重试。");
-    throw new Error("浏览器无法连接 DeepSeek。请检查网络，或换一个能访问 api.deepseek.com 的网络。");
-  } finally {
-    clearTimeout(timer);
-  }
+  const { response, body } = await requestText(target, {
+    headers: { Authorization: `Bearer ${key}` },
+    cache: "no-store",
+  }, 20000, "测试模型超时，请稍后重试。", "浏览器无法连接 DeepSeek，请切换网络后重试。");
   if (response.status === 401 || response.status === 403) {
     throw new Error("Key 测试失败：401/403，API Key 无效、过期或没有权限。");
   }
   let data = null;
   try {
-    data = await response.json();
+    data = JSON.parse(body);
   } catch {}
   if (!response.ok) {
     throw new Error(`Key 测试失败：接口返回 ${response.status}。`);
   }
   const names = Array.isArray(data?.data) ? data.data.map(item => String(item?.id || "")).filter(Boolean) : [];
+  if (!names.length) throw new Error("接口未返回可用模型列表，请检查接口地址后重试。");
   if (names.length && !names.includes(current.modelName)) {
     throw new Error(`Key 可用，但模型名「${current.modelName}」不在官方列表里。可填写：${names.join("、")}。`);
   }
@@ -345,36 +349,23 @@ async function callModel(current, messages, deep = false, maxTokens = 0, timeout
       ];
     }
   }
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), Math.max(10, timeout) * 1000);
   const started = performance.now();
-  let response;
-  try {
-    response = await fetch(endpoint.href, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${current.modelKey}`,
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (error?.name === "AbortError") throw new Error("模型响应超时，请稍后重试。");
-    throw new Error("浏览器无法直连接口。DeepSeek 官方地址支持跨域；其他接口需要允许 CORS。");
-  } finally {
-    clearTimeout(timer);
-  }
+  const { response, body } = await requestText(endpoint.href, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${current.modelKey}`,
+    },
+    body: JSON.stringify(payload),
+  }, timeout * 1000, deep || web
+    ? "模型响应超时。可以关掉「联网」和「深度」再发送。"
+    : "模型响应超时，请重试或切换网络。", "浏览器无法连接模型接口，请检查网络和接口地址。");
   if (!response.ok) {
     let detail = "";
     try {
-      const data = await response.json();
+      const data = JSON.parse(body);
       detail = data?.error?.message || "";
-    } catch {
-      try {
-        detail = (await response.text()).slice(0, 160);
-      } catch {}
-    }
+    } catch {}
     if (response.status === 401 || response.status === 403) {
       throw new Error("模型接口返回 401/403：API Key 无效、过期或没有权限。");
     }
@@ -391,7 +382,7 @@ async function callModel(current, messages, deep = false, maxTokens = 0, timeout
   }
   let data;
   try {
-    data = await response.json();
+    data = JSON.parse(body);
   } catch {
     throw new Error("模型没有返回有效 JSON。");
   }
@@ -493,6 +484,7 @@ function statePayload(library) {
     count: passages.length,
     file_count: files.length,
     passage_count: passages.length,
+    library_unavailable: library.unavailable === true,
     model: Boolean(current.modelUrl && current.modelName && current.modelKey),
     model_url: current.modelUrl,
     model_name: current.modelName,
@@ -544,7 +536,7 @@ async function chat(payload, library) {
       + "普通问题不超过 3 行；复杂问题最多 5 行。用纯文本，不用标题、表格或客服腔。"
       + "能引用资料时写《文件名》，没有依据时直接说不知道，不编造。",
   });
-  const result = await callModel(current, messages, deep, 0, deep ? 180 : 60, searchAvailable);
+  const result = await callModel(current, messages, deep, 0, deep ? 120 : searchAvailable ? 90 : 35, searchAvailable);
   const turns = readTurns();
   const id = turns.reduce((max, item) => Math.max(max, Number(item[0]) || 0), 0) + 1;
   const created = beijingStamp();

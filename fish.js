@@ -1,4 +1,4 @@
-import { createStaticApi } from './fish-static-api.js';
+import { createStaticApi } from './fish-static-api.js?v=20261122b';
 
 const byId = id => document.getElementById(id);
 const presets = {
@@ -268,6 +268,10 @@ async function sendText(text) {
 function library(data) {
   const updated = (data.updated || '').slice(0,16).replace('T',' ');
   if (staticMode) {
+    if (data.library_unavailable) {
+      byId('library').textContent = '资料暂未加载，仍可聊天。刷新页面可重试。';
+      return;
+    }
     const files = Number(data.file_count) || 0;
     const passages = Number(data.passage_count ?? data.count) || 0;
     byId('library').textContent = files + ' 个文件 · ' + passages + ' 段可检索资料 · 发布 ' + updated;
