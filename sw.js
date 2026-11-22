@@ -5,7 +5,7 @@ self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=
 self.addEventListener('fetch',event=>{
  const url=new URL(event.request.url);
  if(event.request.method!=='GET'||url.origin!==location.origin)return;
- if(url.pathname.includes('/api/'))return;
+ if(url.pathname==='/api'||url.pathname.startsWith('/api/')||url.pathname.endsWith('/sw.js'))return;
  const scope=new URL(self.registration.scope).pathname;
  if(!url.pathname.startsWith(scope))return;
  if(event.request.mode==='navigate'){
