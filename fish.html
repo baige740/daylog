@@ -1,27 +1,27 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#eef4ee"><title>大肥鱼聊天 · 日迹</title><script>if(location.hostname==="baige740.github.io"){location.replace("https://daylog-journal-c7w4.caringcatkin4.chatgpt.site/fish.html")}</script><script>document.documentElement.classList.add("daylog-auth-checking")</script><style>html{background:#eef4ee}html.daylog-auth-checking{background:#edf4ee}</style><link rel="icon" href="fish-avatar.webp" type="image/webp"><link rel="stylesheet" href="fish.css?v=20261121e"><link rel="stylesheet" href="auth.css?v=1"></head>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#eef4ee"><title>大肥鱼聊天 · 日迹</title><script>document.documentElement.classList.add("daylog-auth-checking")</script><style>html{background:#eef4ee}html.daylog-auth-checking{background:#edf4ee}</style><link rel="icon" href="fish-avatar.webp" type="image/webp"><link rel="stylesheet" href="fish.css?v=20261122a"><link rel="stylesheet" href="auth.css?v=2"></head>
 <body class="fish-page"><main class="chat">
 <header class="chat-head"><a class="back" href="index.html" aria-label="返回今日手记">‹</a><img class="head-avatar" src="fish-avatar.webp" alt=""><div class="who"><h1>大肥鱼</h1><p><i class="dot"></i><span id="presence">正在连接…</span></p></div><button id="settings">资料与角色</button></header>
-<section id="thread" aria-label="聊天记录"><div id="empty"><img src="fish-avatar.webp" alt=""><h2>今天，聊些什么？</h2><p>问问资料里的事，也可以联网看看今天的新鲜事，或者让我认真想想。</p></div></section>
+<section id="thread" aria-label="聊天记录"><div id="empty"><img src="fish-avatar.webp" alt=""><h2>今天，聊些什么？</h2><p>问问资料、股票和经济，也可以联网看看今天的新鲜事，或者让我认真想想。</p></div></section>
 <footer class="composer-area"><div class="composer-meta"><p id="status" role="status">正在连接…</p><div class="meta-actions"><button type="button" id="deep" class="web-toggle deep-toggle" aria-pressed="false" title="开启后会进行更深入的推理"><i class="web-dot deep-dot"></i>深度</button><button type="button" id="web" class="web-toggle" aria-pressed="true" title="开启后会检索最新网页"><i class="web-dot"></i>联网</button></div></div>
 <div id="tray" hidden><p class="tray-label">动态贴纸</p><div id="sticker-grid"></div><p class="tray-label">表情</p><div id="emoji-grid"></div></div>
 <form id="chat"><button type="button" id="emoji" aria-label="表情和贴纸" aria-expanded="false">☺</button><textarea id="question" aria-label="聊天内容" placeholder="和大肥鱼说说…" maxlength="8000" rows="1" required></textarea><button class="accent" id="send" disabled>发送</button></form></footer>
 </main><dialog id="panel"><div class="head"><h2>资料与角色</h2><button id="close">关闭</button></div>
 <label for="role">大肥鱼的角色</label><textarea id="role" maxlength="4000" rows="4"></textarea><button id="save">保存角色</button>
-<hr><h3>模型接入</h3><p class="hint">自由对话需要一个 OpenAI 兼容接口，只查资料时可以不接。</p>
+<hr><h3>模型接入</h3><p class="hint">Key 只保存在当前浏览器，不会写入公开网页。DeepSeek 支持浏览器直连、模型校验和官方联网搜索；换手机不会自动同步。</p>
 <label for="preset">常用服务</label><select id="preset"><option value="">手动填写</option><option value="deepseek">DeepSeek</option><option value="silicon">硅基流动</option><option value="dashscope">阿里百炼</option><option value="zhipu">智谱</option><option value="ollama">本机 Ollama</option><option value="openai">OpenAI</option></select>
 <label for="model-url">接口地址</label><input id="model-url" placeholder="https://.../v1/chat/completions">
-<label for="model-name">模型名</label><input id="model-name" placeholder="deepseek-v4-flash">
-<label for="model-key">API Key</label><input id="model-key" type="password" autocomplete="new-password" placeholder="本机服务可留空">
+<label for="model-name">模型名</label><input id="model-name" placeholder="deepseek-flash">
+<label for="model-key">API Key</label><input id="model-key" type="password" autocomplete="new-password" placeholder="输入 DeepSeek API Key">
 <div class="model-actions"><button id="save-model" class="accent">接入模型</button><button id="disconnect">断开模型</button></div>
 <p id="model-state" role="status"></p>
-<hr><h3>深度思考</h3><p class="hint">聊天框右下角的「深度」开关。DeepSeek 官方接口会启用思考模式并使用较高的推理投入；普通聊天会明确关闭思考，优先快速回复。其他兼容接口会改用加深推理的提示词。</p>
-<hr><h3>联网搜索</h3><p class="hint">聊天框右下角的「联网」开关。开启后，本机会抓取百度热搜、中国新闻网和 Bing 的公开结果，再交给模型整理，并在回答下显示来源链接；不需要额外 API Key。注意：联网时你的问题会发送给这些公开搜索服务。</p>
-<hr><h3>长期记忆</h3><p class="hint">开启后，大肥鱼会定期从最近的对话里整理长期有用的偏好、目标和事实，并在之后的聊天中自然使用。记忆只保存在本机；可以逐条修改或删除。密码、API Key、证件和银行卡信息不会自动保存。</p>
+<hr><h3>深度思考</h3><p class="hint">聊天框右下角的「深度」开关。DeepSeek 官方接口会启用思考模式并使用较高的推理投入；普通聊天会关闭思考，优先快速回复。开启深度和联网后会进行多步搜索核实。</p>
+<hr><h3>联网搜索</h3><p class="hint">聊天框右下角的「联网」开关。开启后，由 DeepSeek 官方服务端搜索网页并在回答下显示来源，不需要另一台服务器。搜索不额外收费，只计模型 Token；关闭后不会搜索，实时问题会明确提示未核实。</p>
+<hr><h3>长期记忆</h3><p class="hint">开启后，大肥鱼会定期从最近的对话里整理长期有用的偏好、目标和事实，并在之后的聊天中自然使用。记忆和聊天记录只保存在当前设备的浏览器；可以逐条修改或删除。密码、API Key、证件和银行卡信息不会自动保存。</p>
 <label class="switch-line"><input type="checkbox" id="memory-enabled"> 自动整理并带入对话</label>
 <div class="memory-actions"><button id="memory-extract">整理最近对话</button><span id="memory-last"></span></div>
 <div id="memory-list" class="memory-list"></div>
 <div class="memory-add"><select id="memory-kind" aria-label="记忆类型"><option value="preference">偏好</option><option value="fact">事实</option><option value="goal">目标</option><option value="relationship">关系</option><option value="event">事件</option></select><input id="memory-text" maxlength="240" placeholder="例如：我更喜欢简洁直接的回答"><button id="memory-add">添加</button></div>
 <p id="memory-state" role="status"></p>
-<hr><h3>后台资料</h3><p id="library"></p><p class="hint">可批量导入 UTF-8 编码的 TXT 或 Markdown，同名文件会更新。服务运行时每天北京时间 06:00 同步资料目录。</p>
-<input id="files" type="file" accept=".txt,.md" multiple aria-label="选择资料文件"><button id="sync">立即同步</button><p id="feedback" role="status"></p></dialog><script type="module" src="boot.js"></script></body></html>
+<hr><h3>后台资料</h3><p id="library"></p><p class="hint">当前是 GitHub Pages 静态快照。资料可以阅读和检索，但手机不能直接上传到 GitHub；更新资料后需要重新生成并发布。聊天记录可逐条下载为 Markdown。</p>
+<input id="files" type="file" accept=".txt,.md" multiple aria-label="选择资料文件" hidden disabled><button id="sync" hidden disabled>立即同步</button><p id="feedback" role="status"></p></dialog><script type="module" src="boot.js?v=20261122a"></script></body></html>

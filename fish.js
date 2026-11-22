@@ -1,12 +1,18 @@
+import { createStaticApi } from './fish-static-api.js';
+
 const byId = id => document.getElementById(id);
 const presets = {
-  deepseek:['https://api.deepseek.com/v1/chat/completions','deepseek-v4-flash'],
+  deepseek:['https://api.deepseek.com/v1/chat/completions','deepseek-flash'],
   silicon:['https://api.siliconflow.cn/v1/chat/completions','deepseek-ai/DeepSeek-V3'],
   dashscope:['https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions','qwen-plus'],
   zhipu:['https://open.bigmodel.cn/api/paas/v4/chat/completions','glm-4-flash'],
   ollama:['http://127.0.0.1:11434/v1/chat/completions','qwen2.5:7b'],
   openai:['https://api.openai.com/v1/chat/completions','gpt-4o-mini']
 };
+const staticMode =
+  location.hostname === 'baige740.github.io' ||
+  new URLSearchParams(location.search).has('static');
+const staticApi = createStaticApi();
 const stickers = ['🐟💨','🐳🌊','🐡💛','💙✨'];
 const emojis = ['😀','😂','😊','😍','😎','🤔','😴','😭','👍','👏','🙏','💪','👀','🐟','🐳','✨'];
 const kindLabels = {preference:'偏好',fact:'事实',goal:'目标',relationship:'关系',event:'事件'};
@@ -15,12 +21,14 @@ let stateData = {};
 let busy = false;
 let webEnabled = true;
 let deepEnabled = false;
+let keyPrompted = false;
 try {
   webEnabled = localStorage.getItem('fishWeb') !== '0';
   deepEnabled = localStorage.getItem('fishDeep') === '1';
 } catch {}
 
 async function api(path = '', payload) {
+  if (staticMode) return staticApi(path, payload);
   let response;
   try {
     response = await fetch('/api/fish' + path, payload === undefined ? {cache:'no-store'} : {
@@ -36,6 +44,7 @@ async function api(path = '', payload) {
 }
 
 function localServiceHint() {
+  if (staticMode) return '静态页请求失败，请刷新页面后重试。';
   return ['127.0.0.1','localhost'].includes(location.hostname)
     ? '大肥鱼本地服务尚未启动，请在日记目录运行 python scripts/fish.py 后重试。'
     : '大肥鱼聊天需要在本机运行 scripts/fish.py。公开网页只展示界面，不会上传或暴露你的本地资料。';
@@ -147,8 +156,10 @@ function message(name, text, mine, created, turnId, sources = [], deep = false, 
       collect.disabled = true;
       try {
         await api('/collect',{id:turnId});
-        collect.textContent = '已收入资料库';
-        byId('status').textContent = '这段对话已经可以在资料里查到。';
+        collect.textContent = staticMode ? '已下载 Markdown' : '已收入资料库';
+        byId('status').textContent = staticMode
+          ? '对话已下载为 Markdown，可在本机保存或导入资料库。'
+          : '这段对话已经可以在资料里查到。';
       } catch (error) {
         byId('status').textContent = error.message;
         collect.disabled = false;
@@ -174,12 +185,17 @@ function showTyping() {
   return row;
 }
 function presenceText() {
+  if (staticMode) return stateData.model ? '在线 · 浏览器直连' : '待接入模型';
   return stateData.model ? '在线' : '资料检索模式';
 }
 function updateMode(note) {
-  const base = stateData.model
-    ? '角色对话 · 自动保存'
-    : '资料检索模式 · 接入模型后可按角色自由对话';
+  const base = staticMode
+    ? stateData.model
+      ? '静态页 · 浏览器直连 · 记录只存本机'
+      : '静态页 · 请填写 DeepSeek Key'
+    : stateData.model
+      ? '角色对话 · 自动保存'
+      : '资料检索模式 · 接入模型后可按角色自由对话';
   mode = base + ' · ' + (deepEnabled ? '深度思考' : '快速回复') + (webEnabled ? ' · 联网搜索' : ' · 未联网');
   byId('status').textContent = note === undefined ? mode : note;
 }
@@ -250,14 +266,29 @@ async function sendText(text) {
 }
 
 function library(data) {
-  byId('library').textContent = data.count + ' 份资料 · 最近同步 ' + (data.updated || '').slice(0,16).replace('T',' ');
+  const updated = (data.updated || '').slice(0,16).replace('T',' ');
+  if (staticMode) {
+    const files = Number(data.file_count) || 0;
+    const passages = Number(data.passage_count ?? data.count) || 0;
+    byId('library').textContent = files + ' 个文件 · ' + passages + ' 段可检索资料 · 发布 ' + updated;
+    return;
+  }
+  byId('library').textContent = data.count + ' 份资料 · 最近同步 ' + updated;
 }
 function renderModel(data, note) {
   byId('model-url').value = data.model_url || '';
   byId('model-name').value = data.model_name || '';
   byId('model-key').value = '';
-  byId('model-key').placeholder = data.key_saved ? '已保存，留空则保持不变' : '本机服务可留空';
-  byId('model-state').textContent = note || (data.model ? '已接入 ' + data.model_name : '尚未接入模型，当前只查资料');
+  byId('model-key').placeholder = data.key_saved
+    ? '已保存，留空则保持不变'
+    : staticMode
+      ? '输入 DeepSeek API Key'
+      : '本机服务可留空';
+  byId('model-state').textContent = note || (data.model
+    ? '已接入 ' + data.model_name
+    : staticMode
+      ? '填写 DeepSeek Key 后会自动验证 Key 和模型名。'
+      : '尚未接入模型，当前只查资料');
 }
 function renderMemories(items) {
   items = Array.isArray(items) ? items : [];
@@ -346,7 +377,12 @@ async function loadState(renderTurns = true) {
       data.turns.forEach(turn);
       scrollThread();
     }
-    byId('send').disabled = false;
+    byId('send').disabled = staticMode && !data.model;
+    if (staticMode && !data.model && !keyPrompted) {
+      keyPrompted = true;
+      if (!byId('panel').open) byId('panel').showModal();
+      refreshMemories();
+    }
   } catch (error) {
     byId('status').textContent = error.message;
     byId('presence').textContent = '连接失败';
@@ -490,13 +526,14 @@ byId('preset').onchange = () => {
 };
 async function saveModel(payload, note) {
   ['save-model','disconnect'].forEach(id => byId(id).disabled = true);
-  byId('model-state').textContent = '正在保存…';
+  byId('model-state').textContent = staticMode ? '正在验证 Key 和模型名…' : '正在保存…';
   try {
     const data = await api('/model', payload);
     Object.assign(stateData, data, {model_url:payload.url});
     updateMode();
     byId('presence').textContent = presenceText();
     renderModel(stateData, note);
+    byId('send').disabled = staticMode && !data.model;
   } catch (error) {
     byId('model-state').textContent = error.message;
   } finally {
@@ -505,7 +542,7 @@ async function saveModel(payload, note) {
 }
 byId('save-model').onclick = () => saveModel({
   url:byId('model-url').value.trim(), name:byId('model-name').value.trim(), key:byId('model-key').value.trim()
-}, '模型已保存，现在可以自由对话');
+}, staticMode ? 'Key 已验证，模型已保存在这台设备' : '模型已保存，现在可以自由对话');
 byId('disconnect').onclick = () => saveModel({url:'',name:'',key:''}, '已断开模型，恢复资料检索');
 async function manage(action, success) {
   const controls = ['files','save','sync'].map(byId);
