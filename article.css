@@ -203,6 +203,7 @@
   z-index:4;
   display:flex;
   align-items:center;
+  flex-wrap:wrap;
   gap:3px;
   margin-top:22px;
   padding:6px;
@@ -252,11 +253,11 @@
   padding:29px 2px 64px;
   color:#33483d;
   caret-color:var(--journal-cinnabar);
-  font-family:var(--prose-font);
-  font-size:clamp(18px,1.45vw,20px);
+  font-family:var(--doc-font-family,var(--prose-font));
+  font-size:var(--doc-font-size,clamp(18px,1.45vw,20px));
   font-weight:400;
-  line-height:2.05;
-  letter-spacing:.035em;
+  line-height:var(--doc-line-height,2.05);
+  letter-spacing:var(--doc-letter-spacing,.035em);
   word-spacing:.035em;
   overflow-wrap:anywhere;
   white-space:pre-wrap;
@@ -284,7 +285,7 @@
 .article-prose div,
 .article-prose h3,
 .article-prose ul,
-.article-prose ol{margin:0 0 .88em}
+.article-prose ol{margin:0 0 var(--doc-paragraph-gap,.88em)}
 .article-prose h3{
   margin-top:1.15em;
   color:#254d3b;
@@ -389,8 +390,8 @@
 #missing h1{font-family:var(--display-font);font-size:36px}
 #missing p{color:var(--journal-soft)}
 @keyframes paperIn{
-  from{opacity:0;translate:0 7px}
-  to{opacity:1;translate:0 0}
+  from{opacity:0}
+  to{opacity:1}
 }
 @keyframes inkRise{
   0%{opacity:0;filter:blur(2px);transform:translate(-50%,-38%) scale(.9)}
@@ -437,15 +438,16 @@
   .article-meta input{font-size:12px}
   #title,#read-title{font-size:clamp(33px,10vw,42px);margin-top:27px;line-height:1.38}
   .writer-tools{top:68px;gap:1px;margin-top:18px;padding:5px;border-radius:10px}
-  .writer-tools button{min-width:29px;height:30px;padding:0 5px}
-  .writer-tools #smart{margin-left:2px;padding:3px 6px;font-size:11px}
+  .writer-tools{row-gap:4px}
+  .writer-tools button{min-width:40px;height:40px;padding:0 7px}
+  .writer-tools #smart{margin-left:2px;min-height:40px;padding:3px 7px;font-size:11px}
   #count{padding:0 5px;font-size:11px}
   .article-prose{
     min-height:57dvh;
     padding:23px 1px 52px;
-    font-size:18px;
-    line-height:2;
-    letter-spacing:.025em;
+    font-size:var(--doc-font-size,18px);
+    line-height:var(--doc-line-height,2);
+    letter-spacing:var(--doc-letter-spacing,.025em);
   }
   .article-prose h3{font-size:1.18em}
   .article-foot{gap:10px;font-size:11px}

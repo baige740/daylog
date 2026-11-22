@@ -1,10 +1,11 @@
-const CACHE='daylog-shell-v12';
-const files=['./','index.html','app.js','article.js','boot.js','auth.js','auth.css','icons.js','styles.css','journal.js','market.js','market.json','article.html','article.css','writing.js','forest.webp','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png'];
+const CACHE='daylog-shell-v13';
+const files=['./','index.html','fish.html','fish.js','fish.css','fish-avatar.webp','app.js','article.js','boot.js','auth.js','auth.css','icons.js','styles.css','extras.js','extras.css','media.js','insights.js','journal.js','market.js','market.json','article.html','article.css','writing.js','forest.webp','lxgwwenkai-common.woff2','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(files)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('daylog-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{
  const url=new URL(event.request.url);
  if(event.request.method!=='GET'||url.origin!==location.origin)return;
+ if(url.pathname.includes('/api/'))return;
  const scope=new URL(self.registration.scope).pathname;
  if(!url.pathname.startsWith(scope))return;
  if(event.request.mode==='navigate'){
