@@ -80,11 +80,17 @@ function searchText(r){
   const mood=Number.isInteger(r.mood)?feelings[r.mood]:'';
   return [types[r.type],r.title||'',plain(r.html),imageText,mood,r.context?.place||'',r.context?.weather||''].join(' ').toLocaleLowerCase();
 }
+function articlePhotos(html){
+  const template=document.createElement('template');
+  template.innerHTML=html;
+  const photos=Array.from(template.content.querySelectorAll('img[data-media-id]'));
+  return photos.length?'<div class="article-photos">'+photos.map(photo=>photo.outerHTML).join('')+'</div>':'';
+}
 function entry(r){
   const isArticle=r.mode==='article';
   const edit=isArticle?articleLink(r,'edit',icon('pen'),'icon-btn'):'<button class="icon-btn" data-action="edit" aria-label="编辑" title="编辑">'+icon('pen')+'</button>';
   const excerpt=plain(r.html).slice(0,220)||'图片日记';
-  const content=isArticle?'<h3 class="article-entry-title">'+articleLink(r,'read',esc(articleName(r)),'article-title-link')+'</h3><p class="article-excerpt record-styled-copy">'+esc(excerpt)+'</p>'+articleLink(r,'read','阅读全文','article-read'):'<div class="entry-text record-styled-copy">'+r.html+'</div>';
+  const content=isArticle?'<h3 class="article-entry-title">'+articleLink(r,'read',esc(articleName(r)),'article-title-link')+'</h3><p class="article-excerpt record-styled-copy">'+esc(excerpt)+'</p>'+articlePhotos(r.html)+articleLink(r,'read','阅读全文','article-read'):'<div class="entry-text record-styled-copy">'+r.html+'</div>';
   const environment=(r.context||Number.isInteger(r.mood))
     ?'<div class="entry-context-line">'+recordMoodMarkup(r)+contextBadgeMarkup(r.context,{compact:true})+'</div>':'';
 
@@ -95,7 +101,7 @@ function decorateEntries(root=document){
     const record=records.find(item=>item.id===node.dataset.id);
     if(!record)return;
     node.querySelectorAll('.record-styled-copy').forEach(copy=>applyDocumentStyle(copy,record.style,DEFAULT_STYLE));
-    hydrateMedia(node).catch(()=>null);
+    hydrateMedia(node,{preview:true}).catch(()=>null);
   });
 }
 function draftChangedAt(value){
@@ -161,7 +167,7 @@ function renderArticleDrafts(){
 }
 function renderRecords(){
   activeDate=dateKey(new Date());records=entries();const today=records.filter(r=>dateKey(r.at)===activeDate);
-  $('#today-count').textContent=today.length;$('#today-list').innerHTML=today.length?today.slice(0,5).map(entry).join(''):empty('今天的第一页，等你写下','写一条手记，或点击速记，记录就会出现在这里。');
+  $('#today-count').textContent=today.length;$('#today-list').innerHTML=today.length?today.map(entry).join(''):empty('今天的第一页，等你写下','写一条手记，或点击速记，记录就会出现在这里。');
   const lastMood=today.find(r=>r.type==='mood');document.querySelectorAll('.mood').forEach(b=>b.classList.toggle('active',Boolean(lastMood)&&plain(lastMood.html)===feelings[Number(b.dataset.mood)]));
   decorateEntries($('#today-list'));
   renderArticleDrafts();renderCal();

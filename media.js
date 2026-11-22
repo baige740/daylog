@@ -179,7 +179,39 @@ async function mediaUrl(id) {
   return url;
 }
 
-export async function hydrateMedia(root) {
+function openPhoto(source) {
+  const dialog = document.createElement("dialog");
+  dialog.className = "photo-viewer";
+  dialog.setAttribute("aria-label", "全屏查看照片");
+  const photo = document.createElement("img");
+  photo.src = source.src;
+  photo.alt = source.alt;
+  const close = document.createElement("button");
+  close.type = "button";
+  close.textContent = "关闭";
+  close.autofocus = true;
+  close.onclick = () => dialog.close();
+  dialog.onclick = event => {
+    if (event.target === dialog) dialog.close();
+  };
+  dialog.addEventListener("close", () => dialog.remove(), {once:true});
+  dialog.append(photo, close);
+  document.body.append(dialog);
+  dialog.showModal();
+}
+
+function enablePhotoPreview(image) {
+  if (image.parentElement?.classList.contains("photo-trigger")) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "photo-trigger";
+  button.setAttribute("aria-label", "放大查看：" + image.alt);
+  button.onclick = () => openPhoto(image);
+  image.replaceWith(button);
+  button.append(image);
+}
+
+export async function hydrateMedia(root, {preview = false} = {}) {
   if (!root?.querySelectorAll) return;
   const images = Array.from(root.querySelectorAll("img[data-media-id]"));
   await Promise.all(images.map(async image => {
@@ -191,6 +223,7 @@ export async function hydrateMedia(root) {
       image.alt ||= "日记照片";
       image.loading = "lazy";
       image.decoding = "async";
+      if (preview) enablePhotoPreview(image);
     } else {
       image.removeAttribute("src");
       image.alt = "图片未找到";

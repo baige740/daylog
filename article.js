@@ -209,7 +209,7 @@ function showReader(record){
   const readBody=$('#read-body');
   readBody.innerHTML=cleanHTML(record.html);
   applyDocumentStyle(readBody,record.style,DEFAULT_STYLE);
-  hydrateMedia(readBody).catch(()=>null);
+  hydrateMedia(readBody,{preview:true}).catch(()=>null);
   message('已保存到时间线');
   scrollTo(0,0);
 }
