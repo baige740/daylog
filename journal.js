@@ -48,6 +48,32 @@ export function hasMeaningfulContent(html){
   const tmp=document.createElement('div');tmp.innerHTML=cleaned;
   return Boolean(tmp.querySelector('img[data-media-id]'));
 }
+export function parseArticleDraft(raw){
+  if(typeof raw!=='string'||!raw.trim())return null;
+  let value=raw;
+  for(let depth=0;depth<2&&typeof value==='string';depth+=1){
+    const source=value.trim();
+    if(!source)return null;
+    try{
+      value=JSON.parse(source);
+    }catch{
+      value=source;
+      break;
+    }
+  }
+  if(value&&typeof value==='object'&&!Array.isArray(value)){
+    return {
+      ...value,
+      title:typeof value.title==='string'?value.title:'',
+      html:typeof value.html==='string'?value.html:'',
+    };
+  }
+  return value===null||value===undefined?null:{html:String(value)};
+}
+export function hasArticleDraftContent(title,html){
+  const visibleTitle=String(title||'').replace(/[\u200b-\u200d\ufeff]/g,'').trim();
+  return Boolean(visibleTitle)||hasMeaningfulContent(html||'');
+}
 export function formatHTML(html){
   const tmp=document.createElement('div');tmp.innerHTML=cleanHTML(html);
   const walker=document.createTreeWalker(tmp,NodeFilter.SHOW_TEXT);const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
@@ -94,8 +120,14 @@ export function storedDraftEntries(){
   for(let index=0;index<localStorage.length;index+=1){
     const key=localStorage.key(index);
     if(!key?.startsWith(lightDraftPrefix)&&!key?.startsWith(articleDraftPrefix))continue;
+    const isArticleDraft=key.startsWith(articleDraftPrefix);
     const raw=localStorage.getItem(key);
     if(!raw)continue;
+    if(isArticleDraft){
+      const value=parseArticleDraft(raw);
+      if(value&&hasArticleDraftContent(value.title,value.html))drafts.push({key,value});
+      continue;
+    }
     try{
       const value=JSON.parse(raw);
       if(value&&typeof value==='object'&&typeof value.html==='string')drafts.push({key,value});
