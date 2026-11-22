@@ -441,3 +441,8 @@ html.daylog-auth-checking body > *:not(.auth-gate):not(.auth-settings-layer) {
     animation: none;
   }
 }
+
+/* Single taps and pinch gestures remain available on touch screens. */
+html, body, main, section, nav, dialog, form, button, a, input, textarea, select, [contenteditable] {
+  touch-action: manipulation;
+}

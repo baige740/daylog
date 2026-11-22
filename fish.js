@@ -1,6 +1,19 @@
 import { createStaticApi } from './fish-static-api.js?v=20261122b';
 
 const byId = id => document.getElementById(id);
+const viewport = window.visualViewport;
+if (viewport) {
+  // Mobile keyboards can resize the visual viewport without changing 100dvh.
+  const fitChat = () => {
+    if (viewport.scale === 1) {
+      document.documentElement.style.setProperty('--chat-visible-height', viewport.height + 'px');
+    }
+  };
+  viewport.addEventListener('resize', fitChat);
+  window.addEventListener('pageshow', fitChat);
+  fitChat();
+}
+
 const presets = {
   deepseek:['https://api.deepseek.com/v1/chat/completions','deepseek-flash'],
   silicon:['https://api.siliconflow.cn/v1/chat/completions','deepseek-ai/DeepSeek-V3'],

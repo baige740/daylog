@@ -94,3 +94,24 @@ button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}button
 @media(max-width:640px){body{background:#f7faf6}main.chat{height:100dvh;max-width:none;border:0;border-radius:0}.chat-head{padding:10px 12px;gap:8px}.head-avatar{width:38px;height:38px}.who h1{font-size:16px}#settings{font-size:11px;padding:5px 8px}#thread{padding:14px 12px 8px}.bubble-wrap{max-width:80%}.bubble{font-size:15px}#sticker-grid,#emoji-grid{grid-template-columns:repeat(8,1fr)}.sticker-btn,.emoji-btn{font-size:24px}.composer-area{padding:6px 10px max(10px,env(safe-area-inset-bottom))}.composer-meta{margin-bottom:4px}.meta-actions{gap:4px}.web-toggle{font-size:10px;padding:5px 7px;min-height:28px}.source-link span{max-width:150px}.memory-add{grid-template-columns:78px minmax(0,1fr) auto}.memory-add input,.memory-add select{font-size:16px}.memory-add button{padding:8px}.memory-buttons button{padding:5px 4px}}
 @media(max-width:390px){.memory-item{grid-template-columns:1fr auto}.memory-tag{grid-column:1/-1;justify-self:start}.memory-add{grid-template-columns:1fr auto}.memory-add select{grid-column:1/-1}#memory-text{min-width:0}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important}}
+
+main.chat { grid-template-columns: minmax(0, 1fr); }
+#question { min-width: 0; width: 0; }
+#status, #presence { overflow-wrap: anywhere; }
+
+@media (max-width: 640px), (pointer: coarse) {
+  body.fish-page { padding: 0; }
+  main.chat {
+    width: 100%;
+    max-width: none;
+    height: var(--chat-visible-height, 100dvh);
+    border: 0;
+    border-radius: 0;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  .chat-head { padding-top: max(10px, env(safe-area-inset-top)); }
+  #question { font-size: 16px; max-height: min(128px, 24dvh); }
+  #tray { max-height: min(236px, calc(var(--chat-visible-height, 100dvh) * .28)); }
+  #sticker-grid, #emoji-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+}
