@@ -1,5 +1,5 @@
 import {paintIcons} from './icons.js';
-import {types,cleanHTML,hasMeaningfulContent,formatHTML,dateKey,write,validEntry,articleName,articleDraftPrefix,storedDrafts} from './journal.js';
+import {types,cleanHTML,hasMeaningfulContent,parseArticleDraft,hasArticleDraftContent,formatHTML,dateKey,write,validEntry,articleName,articleDraftPrefix,storedDrafts} from './journal.js';
 import {smartType,pastePlain} from './writing.js';
 import {
   DEFAULT_STYLE,
@@ -32,7 +32,7 @@ const allowed=new Set(['note','trade','reflect','quote']);
 const moodNames=['低落','疲惫','平静','愉快','开心'];
 const uid=()=>globalThis.crypto.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2);
 
-let id='',baseRevision=null,draftStamp=null,editing=false,dirty=false,composing=false,timer=0,hasSavedDraft=false,split=false;
+let id='',baseRevision=null,draftStamp=null,loadedDraftSignature='',editing=false,dirty=false,composing=false,timer=0,hasSavedDraft=false,split=false;
 let countTimer=0,typingTimer=0,compositionText='',compositionInkTimer=0;
 let smart=localStorage.getItem('daylog:smart')!=='off',initialAt='',locationBusy=false;
 let currentContext=null,currentMood=null,currentStyle=normalizeStyle(null,DEFAULT_STYLE);
@@ -54,13 +54,29 @@ function readRecord(){
 
 function readDraft(){
   const raw=localStorage.getItem(articleDraftPrefix+id);
-  if(!raw)return null;
-  try{
-    const draft=JSON.parse(raw);
-    return draft&&typeof draft==='object'&&typeof draft.html==='string'?draft:null;
-  }catch{
-    return raw.trim()?{html:raw}:null;
-  }
+  return parseArticleDraft(raw);
+}
+
+function draftSignature(draft){
+  if(!draft)return '';
+  return JSON.stringify({
+    title:typeof draft.title==='string'?draft.title:'',
+    html:typeof draft.html==='string'?draft.html:'',
+    type:draft.type??'',
+    when:draft.when??'',
+    initialAt:draft.initialAt??'',
+    context:draft.context??null,
+    mood:draft.mood??null,
+    style:draft.style??null,
+    baseRevision:draft.baseRevision??null,
+    stamp:draft.stamp??null,
+  });
+}
+
+function ownsCurrentDraft(draft){
+  if(!draft)return false;
+  if(draftStamp||draft.stamp)return draft.stamp===draftStamp;
+  return hasSavedDraft&&draftSignature(draft)===loadedDraftSignature;
 }
 
 function timestampInput(at){
@@ -207,6 +223,7 @@ function loadEditor(record,draft,defaultType){
   baseRevision=draft?(draft.baseRevision??record?.revision??null):record?.revision??null;
   draftStamp=draft?.stamp??null;
   hasSavedDraft=Boolean(draft);
+  loadedDraftSignature=draftSignature(draft);
   split=false;
   initialAt=record?.at||draft?.initialAt||new Date().toISOString();
   title.value=data.title||'';
@@ -234,6 +251,7 @@ function protectOtherEdits(){
   setAddress('draft');
   baseRevision=null;
   draftStamp=null;
+  loadedDraftSignature='';
   hasSavedDraft=false;
   split=true;
 }
@@ -242,11 +260,27 @@ function persistDraft(){
   clearTimeout(timer);
   if(!editing||!dirty)return true;
   try{
+    const nextTitle=title.value.replace(/[\u200b-\u200d\ufeff]/g,'').trim();
+    const nextHTML=cleanHTML(body.innerHTML);
+    if(!hasArticleDraftContent(nextTitle,nextHTML)){
+      const currentDraft=readDraft();
+      if(ownsCurrentDraft(currentDraft)){
+        localStorage.removeItem(articleDraftPrefix+id);
+      }
+      draftStamp=null;
+      loadedDraftSignature='';
+      hasSavedDraft=false;
+      dirty=false;
+      split=false;
+      $('#discard').hidden=true;
+      message('空白内容不会保存为草稿');
+      return true;
+    }
     protectOtherEdits();
     const stamp=uid();
     const draft={
-      title:title.value,
-      html:cleanHTML(body.innerHTML),
+      title:nextTitle,
+      html:nextHTML,
       type:category.value,
       when:when.value,
       initialAt,
@@ -259,6 +293,7 @@ function persistDraft(){
     };
     localStorage.setItem(articleDraftPrefix+id,JSON.stringify(draft));
     draftStamp=stamp;
+    loadedDraftSignature=draftSignature(draft);
     hasSavedDraft=true;
     dirty=false;
     $('#discard').hidden=false;
@@ -327,6 +362,7 @@ function saveArticle(){
       style:currentStyle,
     });
     localStorage.removeItem(articleDraftPrefix+id);
+    loadedDraftSignature='';
     hasSavedDraft=false;
     dirty=false;
     showReader(record);
@@ -405,7 +441,12 @@ function start(){
     showReader(record);
     return;
   }
-  const draft=readDraft();
+  let draft=readDraft();
+  if(draft&&!hasArticleDraftContent(draft.title,draft.html)){
+    try{localStorage.removeItem(articleDraftPrefix+id)}catch{}
+    draft=null;
+    cleanupMedia();
+  }
   if((record&&record.mode!=='article')||(!record&&!draft)){
     // A blank composer has an address before the first keystroke creates its draft.
     if(action==='draft'&&!record&&!draft){
@@ -449,6 +490,7 @@ body.addEventListener('drop',event=>{
 document.addEventListener('compositionstart',()=>{
   composing=true;
   compositionText='';
+  clearTimeout(timer);
   clearTimeout(compositionInkTimer);
 },true);
 document.addEventListener('compositionupdate',event=>{
@@ -456,6 +498,11 @@ document.addEventListener('compositionupdate',event=>{
 },true);
 document.addEventListener('compositionend',event=>{
   composing=false;
+  if(title.contains(event.target)){
+    modified();
+    document.title=(title.value.trim()||'深度记录')+' · 日迹';
+    return;
+  }
   if(!body.contains(event.target))return;
   smartType(body,smart);
   modified();
@@ -469,7 +516,11 @@ body.oninput=event=>{
   if(event.inputType==='insertText')typedInk(event.data);
   else if(event.inputType==='insertCompositionText')scheduleCompositionInk(event.data);
 };
-title.oninput=modified;
+title.oninput=event=>{
+  if(event.isComposing||composing)return;
+  modified();
+  document.title=(title.value.trim()||'深度记录')+' · 日迹';
+};
 category.onchange=modified;
 when.oninput=modified;
 

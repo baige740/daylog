@@ -33,12 +33,13 @@ dialog{margin:auto;width:min(470px,calc(100% - 28px));color:var(--ink);backgroun
 @media(prefers-reduced-motion:reduce){.fish-cta,.fish-top{transition:none}}
 
 
-.deep-link,.article-read,#article-drafts a{display:inline-flex;align-items:center;gap:6px;color:var(--green);text-decoration:none;font-size:14px}
+.deep-link,.article-read{display:inline-flex;align-items:center;gap:6px;color:var(--green);text-decoration:none;font-size:14px}
 .deep-link{background:#e8f1e8;border:1px solid #cddfd0;border-radius:7px;padding:7px 12px;font-weight:600}
-.deep-link svg,#article-drafts svg{width:16px;height:16px}
-.deep-link:hover,#article-drafts a:hover{background:#dfece1}.editor-tools #smart{margin-left:auto}.editor-tools #word-count{margin-left:7px}
-#article-drafts{padding:9px 18px;display:grid;gap:4px;border-top:1px solid var(--line)}
-#article-drafts a{display:block;text-overflow:ellipsis;white-space:nowrap;overflow:hidden;padding:3px 5px}#article-drafts svg{margin-right:5px}
+.deep-link svg,.article-draft-icon svg{width:16px;height:16px}
+.deep-link:hover{background:#dfece1}.editor-tools #smart{margin-left:auto}.editor-tools #word-count{margin-left:7px}
+#article-drafts{padding:9px 18px 12px;display:grid;gap:6px;border-top:1px solid var(--line)}#article-drafts[hidden]{display:none}
+#article-drafts a{display:flex;align-items:center;gap:9px;min-width:0;padding:8px 10px;border:1px solid #e2ebe3;border-radius:9px;background:#f8fbf8;color:var(--green);text-decoration:none;transition:background-color .15s,border-color .15s}
+#article-drafts a:hover{background:#eef6ef;border-color:#cadbce}.article-draft-icon{width:28px;height:28px;flex:0 0 28px;display:grid;place-items:center;border-radius:8px;background:#e4efe7;color:#2b7057}.article-draft-copy{min-width:0;display:grid;gap:2px}.article-draft-label{font-size:12.5px;line-height:1.35;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.article-draft-time{font-size:11px;line-height:1.3;color:#7b8a81;font-weight:450;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .article-entry-title{margin:11px 0 4px;font-size:18px;overflow-wrap:anywhere}.article-title-link,.entry-buttons a,.search-results a{color:inherit;text-decoration:none}
 .article-excerpt{font-size:15px;line-height:1.75;color:var(--muted);margin:4px 0 8px;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .article-read{font-size:13px;text-decoration:underline;text-underline-offset:3px}.article-title-link:hover{text-decoration:underline}

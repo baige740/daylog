@@ -1,7 +1,7 @@
 import {smartType,pastePlain} from './writing.js';
 import {icon,paintIcons} from './icons.js';
 import {startMarket} from './market.js';
-import {types,escapeHTML as esc,cleanHTML,plain,hasMeaningfulContent,formatHTML,dateKey,entries,write,remove,create,validEntry,articleDraftPrefix,lightDraftPrefix,articleName,storedDrafts,storedDraftEntries} from './journal.js';
+import {types,escapeHTML as esc,cleanHTML,plain,hasMeaningfulContent,parseArticleDraft,hasArticleDraftContent,formatHTML,dateKey,entries,write,remove,create,validEntry,articleDraftPrefix,lightDraftPrefix,articleName,storedDrafts,storedDraftEntries} from './journal.js';
 import {consumeRecoveryNotice,lockNow,openPasswordSettings} from './auth.js';
 import {DEFAULT_STYLE,applyDocumentStyle,contextBadgeMarkup,firstImageFiles,moodMarkup,moodPickerMarkup,normalizeContext,normalizeMood,normalizeStyle,requestRecordContext,updateContextButton,updateMoodPicker} from './extras.js';
 import {addImagesToEditor,cleanupUnreferencedMedia,deleteMediaAssets,exportMediaBundle,hydrateMedia,importMediaAssets,referencedMediaIds,saveImageAsset} from './media.js';
@@ -98,19 +98,66 @@ function decorateEntries(root=document){
     hydrateMedia(node).catch(()=>null);
   });
 }
+function draftChangedAt(value){
+  if(value===null||value===undefined||value==='')return null;
+  const numeric=Number(value);
+  if(Number.isFinite(numeric))return numeric;
+  const parsed=Date.parse(String(value));
+  return Number.isFinite(parsed)?parsed:null;
+}
+function formatDraftEditedAt(value){
+  const changed=draftChangedAt(value);
+  if(changed===null)return '时间未知';
+  const date=new Date(changed);
+  const now=new Date(),today=dateKey(now),day=dateKey(date),clock=String(date.getHours()).padStart(2,'0')+':'+String(date.getMinutes()).padStart(2,'0');
+  if(day===today)return '今天 '+clock;
+  const previous=new Date(now.getFullYear(),now.getMonth(),now.getDate()-1);
+  if(day===dateKey(previous))return '昨天 '+clock;
+  if(date.getFullYear()===now.getFullYear())return (date.getMonth()+1)+'月'+date.getDate()+'日 '+clock;
+  return date.getFullYear()+'年'+(date.getMonth()+1)+'月'+date.getDate()+'日 '+clock;
+}
+function firstGraphemes(text,limit){
+  const characters=[];
+  if(globalThis.Intl?.Segmenter){
+    const segmenter=new Intl.Segmenter('zh-CN',{granularity:'grapheme'});
+    for(const item of segmenter.segment(text)){
+      characters.push(item.segment);
+      if(characters.length>limit)break;
+    }
+  }else{
+    characters.push(...Array.from(text));
+  }
+  return {preview:characters.slice(0,limit).join(''),truncated:characters.length>limit};
+}
 function renderArticleDrafts(){
-  const drafts=[];
+  const drafts=[],keys=[];
   for(let i=0;i<localStorage.length;i++){
     const key=localStorage.key(i);
-    if(!key?.startsWith(articleDraftPrefix))continue;
-    try{
-      const d=JSON.parse(localStorage.getItem(key)),id=key.slice(articleDraftPrefix.length);
-      if(/^[\w-]{1,80}$/.test(id))drafts.push({id,title:d.title,changed:d.changed})
-    }catch{}
+    if(key?.startsWith(articleDraftPrefix))keys.push(key);
   }
-  drafts.sort((a,b)=>b.changed-a.changed);
+  for(const key of keys){
+    const raw=localStorage.getItem(key),id=key.slice(articleDraftPrefix.length);
+    if(!raw||!/^[\w-]{1,80}$/.test(id))continue;
+    const d=parseArticleDraft(raw);
+    if(!d)continue;
+    const title=typeof d.title==='string'?d.title.replace(/[\u200b-\u200d\ufeff]/g,'').trim():'',html=typeof d.html==='string'?d.html:'';
+    if(!hasArticleDraftContent(title,html)){
+      try{localStorage.removeItem(key)}catch{}
+      continue;
+    }
+    const text=plain(html).replace(/\s+/g,' ').trim();
+    const excerpt=firstGraphemes(text,6);
+    const bodyPreview=text?excerpt.preview+(excerpt.truncated?'…':''):'图片草稿';
+    const label=title||bodyPreview;
+    drafts.push({id,label,changed:draftChangedAt(d.changed)});
+  }
+  drafts.sort((a,b)=>(Number.isFinite(b.changed)?b.changed:0)-(Number.isFinite(a.changed)?a.changed:0));
   const list=$('#article-drafts');list.hidden=!drafts.length;
-  list.innerHTML=drafts.map(d=>'<a href="article.html#edit/'+d.id+'">'+icon('pen')+'继续草稿 · '+esc(d.title||'未命名长文')+'</a>').join('')
+  list.innerHTML=drafts.map(d=>{
+    const datetime=Number.isFinite(d.changed)?new Date(d.changed).toISOString():'';
+    const timeMarkup='<time class="article-draft-time"'+(datetime?' datetime="'+datetime+'"':'')+'>最后编辑 · '+esc(formatDraftEditedAt(d.changed))+'</time>';
+    return '<a href="article.html#edit/'+d.id+'" title="继续编辑：'+esc(d.label)+'" aria-label="继续编辑草稿 '+esc(d.label)+'"><span class="article-draft-icon">'+icon('pen')+'</span><span class="article-draft-copy"><span class="article-draft-label">'+esc(d.label)+'</span>'+timeMarkup+'</span></a>'
+  }).join('')
 }
 function renderRecords(){
   activeDate=dateKey(new Date());records=entries();const today=records.filter(r=>dateKey(r.at)===activeDate);
@@ -364,6 +411,7 @@ function validBackupDraft(item){
   const suffix=item.key.slice((isArticle?articleDraftPrefix:lightDraftPrefix).length)
   if(!/^[\w-]{1,80}$/.test(suffix))throw new Error('backup draft id')
   const source=item.value
+  if(isArticle&&!hasArticleDraftContent(source.title,source.html))return null
   const value={html:cleanHTML(source.html)}
   if(isArticle){
     value.title=typeof source.title==='string'?source.title.slice(0,160):''
@@ -410,7 +458,7 @@ function openBackup(){
       const data=JSON.parse(await file.text());
       if(data.app!=='daylog'||![1,2,3].includes(data.version)||!Array.isArray(data.entries))throw new Error('backup format');
       const incoming=data.entries.map(validEntry);
-      const incomingDrafts=data.version===3&&Array.isArray(data.drafts)?data.drafts.map(validBackupDraft):[];
+      const incomingDrafts=data.version===3&&Array.isArray(data.drafts)?data.drafts.map(validBackupDraft).filter(Boolean):[];
       if(data.version===3&&!Array.isArray(data.drafts))throw new Error('backup drafts missing');
       if(data.version>=2){
         if(!Array.isArray(data.media))throw new Error('backup media missing');
