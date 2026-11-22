@@ -1,3 +1,4 @@
+import {appVersion} from './version.js';
 import {smartType,pastePlain} from './writing.js';
 import {icon,paintIcons} from './icons.js';
 import {startMarket} from './market.js';
@@ -434,7 +435,7 @@ function validBackupDraft(item){
   return {key:item.key,value}
 }
 function openBackup(){
-  openDialog('我的手记本','<p>这台设备的浏览器中保存了 '+records.length+' 条记录。导出备份会同时包含未完成草稿、照片和自定义背景，已有内容会自动跳过。</p><div class="backup-row"><button class="primary" id="export">'+icon('download')+'导出备份</button><button class="secondary" id="import">'+icon('upload')+'导入备份</button><input type="file" id="backup-file" hidden accept=".json,application/json"></div><p>访问密码只在本机校验，不会随备份上传。</p><div class="backup-row"><button class="secondary" id="change-password">修改访问密码</button><button class="secondary" id="lock-now">立即锁定</button></div><p>手机上可从浏览器菜单添加到主屏幕，随时打开记录。</p><div id="backup-status" role="status"></div>');
+  openDialog('我的手记本','<p>这台设备的浏览器中保存了 '+records.length+' 条记录。导出备份会同时包含未完成草稿、照片和自定义背景，已有内容会自动跳过。</p><div class="backup-row"><button class="primary" id="export">'+icon('download')+'导出备份</button><button class="secondary" id="import">'+icon('upload')+'导入备份</button><input type="file" id="backup-file" hidden accept=".json,application/json"></div><p>访问密码只在本机校验，不会随备份上传。</p><div class="backup-row"><button class="secondary" id="change-password">修改访问密码</button><button class="secondary" id="lock-now">立即锁定</button></div><p>手机上可从浏览器菜单添加到主屏幕，随时打开记录。</p><p>当前版本 · '+appVersion+'</p><div id="backup-status" role="status"></div>');
   const backupStatus=$('#backup-status');
   $('#export').onclick=()=>safeAction(async()=>{
     backupStatus.textContent='正在整理记录和图片…';

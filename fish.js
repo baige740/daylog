@@ -1,15 +1,20 @@
+import {appVersion} from './version.js';
 import { createStaticApi } from './fish-static-api.js?v=20261122b';
 
 const byId = id => document.getElementById(id);
+const versionLabel = byId('app-version');
+if (versionLabel) versionLabel.textContent = appVersion;
 const viewport = window.visualViewport;
 if (viewport) {
   // Mobile keyboards can resize the visual viewport without changing 100dvh.
   const fitChat = () => {
     if (viewport.scale === 1) {
       document.documentElement.style.setProperty('--chat-visible-height', viewport.height + 'px');
+      document.documentElement.style.setProperty('--chat-visible-top', viewport.offsetTop + 'px');
     }
   };
   viewport.addEventListener('resize', fitChat);
+  viewport.addEventListener('scroll', fitChat);
   window.addEventListener('pageshow', fitChat);
   fitChat();
 }
@@ -274,7 +279,6 @@ async function sendText(text) {
     busy = false;
     byId('send').disabled = false;
     scrollThread();
-    input.focus();
   }
 }
 
@@ -424,12 +428,32 @@ function insertEmoji(emoji) {
   const end = input.selectionEnd ?? start;
   input.setRangeText(emoji, start, end, 'end');
   input.dispatchEvent(new Event('input'));
-  input.focus();
+  input.focus({preventScroll:true});
 }
 function growInput(input) {
   input.style.height = 'auto';
   input.style.height = Math.min(input.scrollHeight,128) + 'px';
 }
+
+// Keep the keyboard and hit area stable even while the native button is disabled.
+const sendTarget = byId('send').closest('.send-target') || byId('send');
+let touchOrigin;
+let lastSendTap = -Infinity;
+sendTarget.addEventListener('touchstart', event => {
+  touchOrigin = event.touches.length === 1 ? event.touches[0] : null;
+}, {passive:true});
+sendTarget.addEventListener('touchcancel', () => { touchOrigin = null; });
+sendTarget.addEventListener('touchend', event => {
+  const start = touchOrigin;
+  touchOrigin = null;
+  if (!start || event.touches.length) return;
+  event.preventDefault();
+  const end = event.changedTouches[0];
+  if (end.identifier !== start.identifier || Math.hypot(end.clientX-start.clientX,end.clientY-start.clientY) > 12) return;
+  const now = performance.now();
+  if (now - lastSendTap > 400 && !byId('send').disabled) byId('chat').requestSubmit(byId('send'));
+  lastSendTap = now;
+}, {passive:false});
 
 byId('chat').onsubmit = event => {
   event.preventDefault();

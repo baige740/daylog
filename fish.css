@@ -115,3 +115,14 @@ main.chat { grid-template-columns: minmax(0, 1fr); }
   #tray { max-height: min(236px, calc(var(--chat-visible-height, 100dvh) * .28)); }
   #sticker-grid, #emoji-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
 }
+
+.send-target { display:inline-flex; flex:none; }
+.send-target, #send { touch-action:none; }
+#send { min-height:44px; }
+#send:disabled { pointer-events:none; }
+@media (max-width:640px), (pointer:coarse) {
+  html:has(body.fish-page), body.fish-page { overflow:hidden; overscroll-behavior:none; }
+  main.chat { position:fixed; top:var(--chat-visible-top,0px); inset-inline:0; }
+  #thread { min-height:0; overscroll-behavior:contain; }
+  #question { max-height:min(128px,calc(var(--chat-visible-height,100dvh) * .24)); }
+}
