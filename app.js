@@ -2,11 +2,12 @@ import {appVersion} from './version.js';
 import {smartType,pastePlain} from './writing.js';
 import {icon,paintIcons} from './icons.js';
 import {startMarket} from './market.js';
-import {types,escapeHTML as esc,cleanHTML,plain,hasMeaningfulContent,parseArticleDraft,hasArticleDraftContent,formatHTML,dateKey,entries,write,remove,create,validEntry,articleDraftPrefix,lightDraftPrefix,articleName,storedDrafts,storedDraftEntries} from './journal.js';
+import {types,escapeHTML as esc,cleanHTML,plain,hasMeaningfulContent,parseArticleDraft,hasArticleDraftContent,formatHTML,dateKey,entries,write,remove,create,validEntry,articleDraftPrefix,lightDraftPrefix,articleName,storedDrafts} from './journal.js';
 import {consumeRecoveryNotice,lockNow,openPasswordSettings} from './auth.js';
 import {DEFAULT_STYLE,applyDocumentStyle,contextBadgeMarkup,firstImageFiles,moodMarkup,moodPickerMarkup,normalizeContext,normalizeMood,normalizeStyle,requestRecordContext,updateContextButton,updateMoodPicker} from './extras.js';
-import {addImagesToEditor,cleanupUnreferencedMedia,deleteMediaAssets,exportMediaBundle,hydrateMedia,importMediaAssets,referencedMediaIds,saveImageAsset} from './media.js';
+import {addImagesToEditor,cleanupUnreferencedMedia,deleteMediaAssets,hydrateMedia,importMediaAssets,referencedMediaIds,saveImageAsset} from './media.js';
 import {renderStatsPage} from './insights.js';
+import {buildJournalBackup,getJournalCloudState,replaceJournalSyncCode,restoreJournalBackup,startJournalCloud,uploadJournalBackup} from './journal-cloud.js';
 const $=s=>document.querySelector(s);
 const editor=$('#editor'),dialog=$('#dialog'),dialogBody=$('#dialog-content');
 const editorSurface=$('#editor-surface'),contextButton=$('#locate-weather'),moodButtons=$('#entry-moods');
@@ -434,22 +435,137 @@ function validBackupDraft(item){
   value.changed=Number.isFinite(Number(source.changed))?Number(source.changed):Date.now()
   return {key:item.key,value}
 }
+async function importBackupData(data,statusElement){
+  const addedIds=[],addedDraftKeys=[];
+  let importedMediaIds=[],missingMediaCount=0;
+  try{
+    if(data.app!=='daylog'||![1,2,3].includes(data.version)||!Array.isArray(data.entries))throw new Error('backup format');
+    const incoming=data.entries.map(validEntry);
+    const incomingDrafts=data.version===3&&Array.isArray(data.drafts)?data.drafts.map(validBackupDraft).filter(Boolean):[];
+    if(data.version===3&&!Array.isArray(data.drafts))throw new Error('backup drafts missing');
+    if(data.version>=2){
+      if(!Array.isArray(data.media))throw new Error('backup media missing');
+      const provided=new Set(data.media.map(item=>String(item?.id||'')));
+      const missing=Array.from(referencedMediaIds(incoming,incomingDrafts.map(item=>item.value))).filter(id=>!provided.has(id));
+      missingMediaCount=missing.length;
+      const declared=new Set(Array.isArray(data.missingMedia)?data.missingMedia.map(String):[]);
+      const undeclared=missing.filter(id=>!declared.has(id));
+      if(data.version===2&&missing.length)throw new Error('backup media incomplete');
+      if(data.version===3&&undeclared.length)throw new Error('backup media incomplete');
+      importedMediaIds=(await importMediaAssets(data.media)).addedIds;
+    }
+    const existing=new Set(entries().map(record=>record.id));
+    for(const record of incoming){
+      if(existing.has(record.id))continue;
+      write(record);existing.add(record.id);addedIds.push(record.id);
+    }
+    for(const draft of incomingDrafts){
+      if(localStorage.getItem(draft.key)!==null)continue;
+      localStorage.setItem(draft.key,JSON.stringify(draft.value));addedDraftKeys.push(draft.key);
+    }
+    statusElement.textContent='恢复 '+addedIds.length+' 条记录、'+addedDraftKeys.length+' 份草稿，跳过 '
+      +(incoming.length-addedIds.length)+' 条重复记录'+(missingMediaCount?'；另有 '+missingMediaCount+' 张图片在原备份中已标记缺失。':'。');
+    renderRecords();
+    return {addedIds,addedDraftKeys,importedMediaIds,missingMediaCount,incomingCount:incoming.length};
+  }catch(error){
+    for(const id of addedIds)remove(id);
+    for(const key of addedDraftKeys)localStorage.removeItem(key);
+    const remaining=referencedMediaIds(entries(),storedDrafts());
+    await deleteMediaAssets(importedMediaIds.filter(id=>!remaining.has(id))).catch(()=>null);
+    statusElement.textContent='导入未完成，未新增记录。请检查备份是否完整、图片格式和本机存储空间。';
+    renderRecords();
+    throw error;
+  }
+}
+function cloudTime(value){
+  const date=new Date(value||'');
+  if(!value||!Number.isFinite(date.getTime()))return '尚未完成';
+  return date.toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+}
+async function copyText(value){
+  if(navigator.clipboard?.writeText){
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const input=document.createElement('textarea');
+  input.value=value;input.style.position='fixed';input.style.opacity='0';
+  document.body.append(input);input.select();
+  const copied=document.execCommand('copy');
+  input.remove();
+  if(!copied)throw new Error('copy failed');
+}
 function openBackup(){
-  openDialog('我的手记本','<p>这台设备的浏览器中保存了 '+records.length+' 条记录。导出备份会同时包含未完成草稿、照片和自定义背景，已有内容会自动跳过。</p><div class="backup-row"><button class="primary" id="export">'+icon('download')+'导出备份</button><button class="secondary" id="import">'+icon('upload')+'导入备份</button><input type="file" id="backup-file" hidden accept=".json,application/json"></div><p>访问密码只在本机校验，不会随备份上传。</p><div class="backup-row"><button class="secondary" id="change-password">修改访问密码</button><button class="secondary" id="lock-now">立即锁定</button></div><p>手机上可从浏览器菜单添加到主屏幕，随时打开记录。</p><p>当前版本 · '+appVersion+'</p><div id="backup-status" role="status"></div>');
+  openDialog('我的手记本','<section class="cloud-backup" aria-labelledby="cloud-title"><div class="cloud-backup-head"><span class="cloud-mark">'+icon('shield')+'</span><div><b id="cloud-title">GitHub 加密备份</b><p>手记和图片先在设备内加密，云端与 GitHub 只保存无法阅读的密文。</p></div><span class="cloud-phase" id="cloud-phase">准备中</span></div><div class="cloud-summary" id="cloud-summary"></div><div class="cloud-code-box"><label for="cloud-code">换手机恢复码</label><code id="cloud-code"></code></div><div class="backup-row cloud-actions"><button class="primary" id="cloud-now">'+icon('upload')+'立即备份</button><button class="secondary" id="copy-code">复制恢复码</button><button class="secondary" id="download-code">'+icon('download')+'保存恢复码</button></div><details class="cloud-restore"><summary>换手机或从云端恢复</summary><p>粘贴之前保存的恢复码。备份会与这台设备已有记录合并，重复内容自动跳过。</p><label class="field-label" for="restore-code">云端恢复码</label><textarea class="field" id="restore-code" rows="3" autocomplete="off" spellcheck="false" placeholder="DAYLOG1.…"></textarea><button class="primary" id="restore-cloud">'+icon('download')+'从云端恢复</button></details><div id="backup-status" class="backup-status" role="status"></div></section><section class="local-backup"><div class="backup-section-head"><b>本机 JSON 备份</b><span>'+records.length+' 条记录</span></div><p>需要自己保存备份文件时，可导出全部草稿、照片和自定义背景。导入时已有内容会自动跳过。</p><div class="backup-row"><button class="secondary" id="export">'+icon('download')+'导出文件</button><button class="secondary" id="import">'+icon('upload')+'导入文件</button><input type="file" id="backup-file" hidden accept=".json,application/json"></div></section><section class="local-backup"><div class="backup-section-head"><b>访问安全</b><span>当前版本 '+appVersion+'</span></div><p>访问密码只在本机校验，不会随备份上传。手机上可从浏览器菜单添加到主屏幕。</p><div class="backup-row"><button class="secondary" id="change-password">修改访问密码</button><button class="secondary" id="lock-now">立即锁定</button></div></section>');
   const backupStatus=$('#backup-status');
+  const cloudPhase=$('#cloud-phase'),cloudSummary=$('#cloud-summary'),cloudCode=$('#cloud-code');
+  const stateLabels={uploading:'正在加密上传',success:'已加密备份',current:'云端已是最新',error:'等待自动重试',empty:'等待首次记录',restored:'恢复完成',code:'恢复码已切换'};
+  const renderCloud=detail=>{
+    if(!dialog.open||!cloudPhase)return;
+    const state={...getJournalCloudState(),...(detail?.config||{})};
+    const phase=detail?.phase||(state.lastError?'error':state.lastSuccess?'success':'empty');
+    cloudPhase.dataset.phase=phase;
+    cloudPhase.textContent=stateLabels[phase]||'等待首次备份';
+    const recordsText=(Number(state.recordCount)||0)+' 条记录';
+    const draftsText=(Number(state.draftCount)||0)+' 份草稿';
+    const mediaText=(Number(state.mediaCount)||0)+' 张图片';
+    cloudSummary.textContent=(state.lastSuccess?'最近备份 '+cloudTime(state.lastSuccess)+' · ':'')+recordsText+' · '+draftsText+' · '+mediaText;
+    cloudSummary.title=detail?.message||state.lastMessage||state.lastError||'';
+    cloudCode.textContent=state.recoveryCode;
+  };
+  const onCloudStatus=event=>renderCloud(event.detail);
+  window.addEventListener('daylog:cloud-status',onCloudStatus);
+  dialogCleanup=()=>window.removeEventListener('daylog:cloud-status',onCloudStatus);
+  renderCloud();
+  $('#cloud-now').onclick=async()=>{
+    const button=$('#cloud-now');
+    button.disabled=true;backupStatus.textContent='正在整理记录和图片，并在设备内加密…';
+    try{
+      await uploadJournalBackup({force:true});
+      backupStatus.textContent='加密备份已上传。GitHub 会在下一次定时镜像时同步最新密文。';
+    }catch(error){
+      backupStatus.textContent=error instanceof Error?error.message:'自动备份失败，联网后会自动重试。';
+    }finally{button.disabled=false}
+  };
+  $('#copy-code').onclick=async()=>{
+    try{
+      await copyText(getJournalCloudState().recoveryCode);
+      backupStatus.textContent='恢复码已复制。请放到密码管理器或只由自己保管的位置。';
+    }catch{
+      backupStatus.textContent='复制失败，请长按恢复码手动复制。';
+    }
+  };
+  $('#download-code').onclick=()=>{
+    const state=getJournalCloudState();
+    const content=['日迹 Daylog 云端恢复码','',state.recoveryCode,'','请离线妥善保管。任何人取得这份恢复码，都可能读取你的加密备份。','恢复码不会显示在 GitHub 或云端数据库中。'].join('\n');
+    const blob=new Blob([content],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');
+    link.href=url;link.download='日迹-云端恢复码.txt';link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    backupStatus.textContent='恢复码文件已下载，请放在只有你能访问的位置。';
+  };
+  $('#restore-cloud').onclick=async()=>{
+    const button=$('#restore-cloud'),code=$('#restore-code').value.trim();
+    if(!code){$('#restore-code').focus();backupStatus.textContent='请先粘贴完整的云端恢复码。';return}
+    button.disabled=true;backupStatus.textContent='正在验证恢复码并解密云端备份…';
+    try{
+      const restored=await restoreJournalBackup(code,{activate:false});
+      await importBackupData(restored.payload,backupStatus);
+      replaceJournalSyncCode(restored.syncCode||code);
+      backupStatus.textContent='云端恢复完成，已切换为这份备份的恢复码。之后的新记录会自动继续备份。';
+      toast('已从云端恢复手记');
+    }catch(error){
+      backupStatus.textContent=error instanceof Error?error.message:'云端恢复失败，请检查恢复码和网络后重试。';
+    }finally{button.disabled=false}
+  };
   $('#export').onclick=()=>safeAction(async()=>{
     backupStatus.textContent='正在整理记录和图片…';
     try{
-      const current=entries();
-      const drafts=storedDraftEntries();
-      const {media,missingIds}=await exportMediaBundle(current,drafts.map(item=>item.value));
-      const payload={app:'daylog',version:3,exportedAt:new Date().toISOString(),entries:current,drafts,media,missingMedia:missingIds};
+      const {payload,counts}=await buildJournalBackup();
       const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
       const url=URL.createObjectURL(blob),a=document.createElement('a');
       a.href=url;a.download='日迹-'+dateKey(new Date())+'.json';a.click();
       setTimeout(()=>URL.revokeObjectURL(url),1000);
-      backupStatus.textContent='已导出 '+current.length+' 条记录、'+drafts.length+' 份草稿和 '+media.length+' 张图片。'
-        +(missingIds.length?' 另有 '+missingIds.length+' 张旧图片在当前浏览器中已缺失，备份会如实标记。':'');
+      backupStatus.textContent='已导出 '+counts.records+' 条记录、'+counts.drafts+' 份草稿和 '+counts.media+' 张图片。'
+        +(counts.missingMedia?' 另有 '+counts.missingMedia+' 张旧图片在当前浏览器中已缺失，备份会如实标记。':'');
     }catch(error){
       backupStatus.textContent='导出失败，请检查本机存储空间后重试。';
       throw error;
@@ -458,45 +574,11 @@ function openBackup(){
   $('#import').onclick=()=>$('#backup-file').click();
   $('#backup-file').onchange=async event=>{
     const file=event.target.files[0];if(!file)return;
-    const addedIds=[],addedDraftKeys=[];
-    let importedMediaIds=[],missingMediaCount=0;
     try{
       backupStatus.textContent='正在检查备份…';
-      const data=JSON.parse(await file.text());
-      if(data.app!=='daylog'||![1,2,3].includes(data.version)||!Array.isArray(data.entries))throw new Error('backup format');
-      const incoming=data.entries.map(validEntry);
-      const incomingDrafts=data.version===3&&Array.isArray(data.drafts)?data.drafts.map(validBackupDraft).filter(Boolean):[];
-      if(data.version===3&&!Array.isArray(data.drafts))throw new Error('backup drafts missing');
-      if(data.version>=2){
-        if(!Array.isArray(data.media))throw new Error('backup media missing');
-        const provided=new Set(data.media.map(item=>String(item?.id||'')));
-        const missing=Array.from(referencedMediaIds(incoming,incomingDrafts.map(item=>item.value))).filter(id=>!provided.has(id));
-        missingMediaCount=missing.length;
-        const declared=new Set(Array.isArray(data.missingMedia)?data.missingMedia.map(String):[]);
-        const undeclared=missing.filter(id=>!declared.has(id));
-        if(data.version===2&&missing.length)throw new Error('backup media incomplete');
-        if(data.version===3&&undeclared.length)throw new Error('backup media incomplete');
-        importedMediaIds=(await importMediaAssets(data.media)).addedIds;
-      }
-      const existing=new Set(entries().map(record=>record.id));
-      for(const record of incoming){
-        if(existing.has(record.id))continue;
-        write(record);existing.add(record.id);addedIds.push(record.id);
-      }
-      for(const draft of incomingDrafts){
-        if(localStorage.getItem(draft.key)!==null)continue;
-        localStorage.setItem(draft.key,JSON.stringify(draft.value));addedDraftKeys.push(draft.key);
-      }
-      backupStatus.textContent='导入 '+addedIds.length+' 条记录、'+addedDraftKeys.length+' 份草稿，跳过 '
-        +(incoming.length-addedIds.length)+' 条重复记录'+(missingMediaCount?'，其中 '+missingMediaCount+' 张图片在原备份中已标记缺失。':'。');
-      renderRecords();
-    }catch(error){
-      for(const id of addedIds)remove(id);
-      for(const key of addedDraftKeys)localStorage.removeItem(key);
-      const remaining=referencedMediaIds(entries(),storedDrafts());
-      await deleteMediaAssets(importedMediaIds.filter(id=>!remaining.has(id))).catch(()=>null);
-      backupStatus.textContent='导入未完成，未新增记录。请检查备份是否完整、图片格式和本机存储空间。';
-      renderRecords();
+      await importBackupData(JSON.parse(await file.text()),backupStatus);
+    }catch{
+      if(!backupStatus.textContent.startsWith('导入未完成'))backupStatus.textContent='导入失败，请检查备份文件后重试。';
     }finally{event.target.value=''}
   };
   $('#change-password').onclick=()=>{dialog.close();openPasswordSettings()};
@@ -523,6 +605,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)changeDay(
 paintIcons();headerDate();renderButtons();const lastTab=localStorage.getItem('daylog:tab');selectTab(tabs.some(([t])=>t===lastTab)?lastTab:'note',false);navigate('home');startMarket(openDialog,toast);
 $('#mobile-profile').onclick=openBackup;
 cleanupUnreferencedMedia(entries(),storedDrafts()).catch(()=>null);
+startJournalCloud();
 if(consumeRecoveryNotice())toast('已使用找回词语进入，请在“我的手记本”中修改访问密码');
 if('serviceWorker' in navigator&&window.isSecureContext)navigator.serviceWorker.register('./sw.js').then(r=>r.update()).catch(()=>{});
 

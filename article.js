@@ -23,6 +23,7 @@ import {
   referencedMediaIds,
   saveImageAsset,
 } from './media.js';
+import {startJournalCloud} from './journal-cloud.js';
 
 const $=selector=>document.querySelector(selector);
 const body=$('#body'),title=$('#title'),category=$('#category'),when=$('#when');
@@ -636,4 +637,5 @@ window.addEventListener('storage',event=>{
 
 start();
 cleanupMedia();
+startJournalCloud();
 if('serviceWorker' in navigator&&window.isSecureContext)navigator.serviceWorker.register('./sw.js').then(r=>r.update()).catch(()=>{});

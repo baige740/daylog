@@ -1,0 +1,103 @@
+name: Mirror encrypted Daylog backup
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mirror-daylog-backup
+  cancel-in-progress: true
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download latest encrypted snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="https://daylog-journal-c7w4.caringcatkin4.chatgpt.site/api/journal/latest"
+          status="$(curl --silent --show-error --location \
+            --retry 3 --retry-delay 2 \
+            --output "$RUNNER_TEMP/daylog-encrypted.json" \
+            --write-out '%{http_code}' \
+            "$endpoint")"
+          echo "backup_status=$status" >> "$GITHUB_ENV"
+          if [ "$status" = "404" ]; then
+            echo "No encrypted backup is available yet."
+            exit 0
+          fi
+          if [ "$status" != "200" ]; then
+            cat "$RUNNER_TEMP/daylog-encrypted.json"
+            exit 1
+          fi
+
+      - name: Validate encrypted snapshot
+        if: env.backup_status == '200'
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = process.env.RUNNER_TEMP + "/daylog-encrypted.json";
+          const size = fs.statSync(path).size;
+          if (size <= 0 || size > 24 * 1024 * 1024) {
+            throw new Error(`Unexpected encrypted snapshot size: ${size}`);
+          }
+          const data = JSON.parse(fs.readFileSync(path, "utf8"));
+          const payload = data && data.payload;
+          if (
+            data.format !== "daylog-encrypted-backup"
+            || data.version !== 1
+            || !payload
+            || payload.format !== "DAYLOG1"
+            || payload.version !== 1
+            || !["gzip", "none"].includes(payload.compression)
+            || typeof payload.iv !== "string"
+            || typeof payload.ciphertext !== "string"
+            || payload.ciphertext.length < 20
+          ) {
+            throw new Error("The downloaded file is not a valid encrypted Daylog snapshot.");
+          }
+          console.log(`Validated encrypted snapshot: ${size} bytes`);
+          NODE
+
+      - name: Compare with the current backup branch
+        if: env.backup_status == '200'
+        id: compare
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin \
+            +refs/heads/journal-backups:refs/remotes/origin/journal-backups \
+            >/dev/null 2>&1 || true
+          if git show origin/journal-backups:journal-backups/latest.daylog.enc.json \
+            >"$RUNNER_TEMP/daylog-branch.json" 2>/dev/null \
+            && cmp --silent "$RUNNER_TEMP/daylog-encrypted.json" "$RUNNER_TEMP/daylog-branch.json"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit latest encrypted snapshot
+        if: env.backup_status == '200' && steps.compare.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "daylog-backup-bot"
+          git config user.email "daylog-backup-bot@users.noreply.github.com"
+          git checkout --orphan journal-backups
+          git rm -rf . >/dev/null
+          mkdir -p journal-backups
+          cp "$RUNNER_TEMP/daylog-encrypted.json" journal-backups/latest.daylog.enc.json
+          git add journal-backups/latest.daylog.enc.json
+          git commit -m "Mirror encrypted Daylog snapshot"
+          git push --force origin HEAD:refs/heads/journal-backups
