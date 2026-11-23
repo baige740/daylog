@@ -453,15 +453,17 @@ export async function startMarket(openDialog, toast) {
           + yuanPrice(quoteSymbols[index], row.price, fx.rate) + "</span>"
         : "";
       const marketBreadth = index === 0 ? breadthMarkup(breadth) : "";
+      const trend = '<span class="market-trend"><span class="market-change '
+        + (row?.change > 0 ? "up" : "") + '">'
+        + (row ? icon(row.change > 0 ? "trendUp" : "trendDown") + delta(row.change) : "暂无报价")
+        + "</span>" + curve(row?.history, tone, "curve" + index) + "</span>";
       return '<button class="market-card" data-asset="' + index
         + '" style="--tone:' + tone + ";--light:" + light
         + '" aria-label="查看' + name + '详情"><span class="market-name">'
         + '<span class="asset-glyph">' + icon(glyph) + "</span>" + name
         + '</span><strong class="market-price">' + (row ? format(row.price) : "—")
         + " <small>" + unit + '</small></strong>' + cny
-        + '<span class="market-change ' + (row?.change > 0 ? "up" : "") + '">'
-        + (row ? icon(row.change > 0 ? "trendUp" : "trendDown") + delta(row.change) : "暂无报价")
-        + "</span>" + marketBreadth + curve(row?.history, tone, "curve" + index)
+        + trend + marketBreadth
         + "</button>";
     }).join("");
   }
