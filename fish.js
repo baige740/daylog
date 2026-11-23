@@ -1,5 +1,5 @@
 import {appVersion} from './version.js';
-import { createStaticApi } from './fish-static-api.js?v=20261123b';
+import { createStaticApi } from './fish-static-api.js?v=20261123c';
 
 const byId = id => document.getElementById(id);
 const versionLabel = byId('app-version');
@@ -24,19 +24,46 @@ function showFallbackRole(role) {
   roleInput.value = role;
 }
 const viewport = window.visualViewport;
-if (viewport) {
-  // Mobile keyboards can resize the visual viewport without changing 100dvh.
-  const fitChat = () => {
-    if (viewport.scale === 1) {
-      document.documentElement.style.setProperty('--chat-visible-height', viewport.height + 'px');
-      document.documentElement.style.setProperty('--chat-visible-top', viewport.offsetTop + 'px');
-    }
-  };
-  viewport.addEventListener('resize', fitChat);
-  viewport.addEventListener('scroll', fitChat);
-  window.addEventListener('pageshow', fitChat);
-  fitChat();
+let fitFrame = 0;
+let fitTimers = [];
+let pinThreadOnFocus = false;
+function applyVisibleViewport() {
+  fitFrame = 0;
+  const height = Math.round(viewport?.height || window.innerHeight || document.documentElement.clientHeight || 0);
+  const top = Math.max(0, Math.round(viewport?.offsetTop || 0));
+  if (height > 0) document.documentElement.style.setProperty('--chat-visible-height', height + 'px');
+  document.documentElement.style.setProperty('--chat-visible-top', top + 'px');
+  const keyboardOpen = Boolean(viewport) && window.innerHeight - viewport.height > 120;
+  document.body.classList.toggle('chat-keyboard', keyboardOpen);
+  if (keyboardOpen && pinThreadOnFocus) {
+    pinThreadOnFocus = false;
+    scrollThread();
+  }
 }
+function fitChat() {
+  if (!fitFrame) fitFrame = requestAnimationFrame(applyVisibleViewport);
+}
+function scheduleFitChat() {
+  fitChat();
+  fitTimers.forEach(timer => clearTimeout(timer));
+  fitTimers = [80, 180, 320, 520].map(delay => setTimeout(fitChat, delay));
+}
+if (viewport) {
+  // iOS and Android report keyboard changes differently. Follow both viewports.
+  viewport.addEventListener('resize', scheduleFitChat, {passive:true});
+  viewport.addEventListener('scroll', scheduleFitChat, {passive:true});
+}
+window.addEventListener('resize', scheduleFitChat, {passive:true});
+window.addEventListener('orientationchange', scheduleFitChat);
+window.addEventListener('pageshow', scheduleFitChat);
+document.addEventListener('focusin', event => {
+  if (event.target !== byId('question')) return;
+  const thread = byId('thread');
+  pinThreadOnFocus = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 100;
+  scheduleFitChat();
+});
+document.addEventListener('focusout', scheduleFitChat);
+scheduleFitChat();
 
 const presets = {
   deepseek:['https://api.deepseek.com/v1/chat/completions','deepseek-flash'],
@@ -59,6 +86,7 @@ let busy = false;
 let webEnabled = true;
 let deepEnabled = false;
 let keyPrompted = false;
+let lastRenderedDate = '';
 try {
   webEnabled = localStorage.getItem('fishWeb') !== '0';
   deepEnabled = localStorage.getItem('fishDeep') === '1';
@@ -100,8 +128,41 @@ function clock(created) {
   const hour = time.slice(0,5);
   return date === todayKey() ? hour : date.slice(5) + ' ' + hour;
 }
+function createdDateKey(created) {
+  const match = String(created || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? match[1] + '-' + match[2] + '-' + match[3] : todayKey();
+}
+function dateLabel(key) {
+  const match = String(key || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const now = new Date();
+  if (!match) return '日期未知';
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  if (!Number.isFinite(date.getTime())) return key;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const difference = Math.round((today.getTime() - date.getTime()) / 86400000);
+  const weekday = '日一二三四五六'[date.getDay()];
+  const dayText = year === now.getFullYear() ? month + '月' + day + '日' : year + '年' + month + '月' + day + '日';
+  const prefix = difference === 0 ? '今天 · ' : difference === 1 ? '昨天 · ' : '';
+  return prefix + dayText + ' 周' + weekday;
+}
+function shortDateLabel(key) {
+  return dateLabel(key).replace(/\s+周[日一二三四五六]$/, '');
+}
 function isSticker(text) {
-  return stickers.includes(text.trim());
+  return stickers.includes(String(text || '').trim());
+}
+function splitStickerMessage(text) {
+  const value = String(text || '').trim();
+  if (isSticker(value)) return {body:'', sticker:value};
+  const lines = value.split(/\r?\n/);
+  const last = (lines[lines.length - 1] || '').trim();
+  if (stickers.includes(last)) {
+    return {body:lines.slice(0, -1).join('\n').trim(), sticker:last};
+  }
+  return {body:value, sticker:''};
 }
 function isEmojiOnly(text) {
   const clean = text.trim();
@@ -115,6 +176,18 @@ function isEmojiOnly(text) {
 function scrollThread() {
   const thread = byId('thread');
   thread.scrollTop = thread.scrollHeight;
+}
+function ensureDateDivider(created) {
+  const key = createdDateKey(created);
+  if (key === lastRenderedDate) return;
+  lastRenderedDate = key;
+  const divider = document.createElement('div');
+  divider.className = 'day-divider';
+  divider.setAttribute('role','separator');
+  const label = document.createElement('span');
+  label.textContent = dateLabel(key);
+  divider.append(label);
+  byId('thread').append(divider);
 }
 
 function sourcesBox(sources) {
@@ -153,6 +226,8 @@ function sourcesBox(sources) {
 
 function message(name, text, mine, created, turnId, sources = [], deep = false, elapsedMs = 0) {
   sources = Array.isArray(sources) ? sources : [];
+  ensureDateDivider(created || nowStamp());
+  const reply = splitStickerMessage(text);
   const row = document.createElement('article');
   row.className = 'msg ' + (mine ? 'mine' : 'bot');
   const avatar = mine ? document.createElement('span') : document.createElement('img');
@@ -175,12 +250,20 @@ function message(name, text, mine, created, turnId, sources = [], deep = false, 
     badge.title = '这条回答使用了深度思考模式';
     meta.append(badge);
   }
-  const bubble = document.createElement('p');
-  bubble.className = 'bubble';
-  if (isSticker(text)) bubble.classList.add('sticker');
-  else if (isEmojiOnly(text)) bubble.classList.add('emoji-only');
-  bubble.textContent = text;
-  wrap.append(meta, bubble);
+  wrap.append(meta);
+  if (reply.body || !reply.sticker) {
+    const bubble = document.createElement('p');
+    bubble.className = 'bubble';
+    if (isEmojiOnly(reply.body)) bubble.classList.add('emoji-only');
+    bubble.textContent = reply.body;
+    wrap.append(bubble);
+  }
+  if (reply.sticker) {
+    const bubble = document.createElement('p');
+    bubble.className = 'bubble sticker' + (reply.body ? ' extra-sticker' : '');
+    bubble.textContent = reply.sticker;
+    wrap.append(bubble);
+  }
   if (!mine && sources.length) {
     const links = sourcesBox(sources);
     if (links) wrap.append(links);
@@ -212,6 +295,15 @@ function turn([id, question, answer, created, sources = [], deep = 0, elapsedMs 
   byId('empty').hidden = true;
   message('我', question, true, created);
   message('大肥鱼', answer, false, created, id, Array.isArray(sources) ? sources : [], Boolean(deep), Number(elapsedMs) || 0);
+}
+function renderTurns(turns) {
+  const thread = byId('thread');
+  thread.querySelectorAll('.msg, .day-divider').forEach(node => node.remove());
+  lastRenderedDate = '';
+  const rows = Array.isArray(turns) ? turns.filter(Array.isArray) : [];
+  byId('empty').hidden = rows.length > 0;
+  rows.forEach(turn);
+  scrollThread();
 }
 function showTyping() {
   const row = document.createElement('article');
@@ -430,7 +522,7 @@ async function refreshMemories() {
     byId('memory-state').textContent = error.message;
   }
 }
-async function loadState(renderTurns = true) {
+async function loadState(showTurns = true) {
   try {
     const data = await api('/state', {});
     stateData = data;
@@ -440,10 +532,7 @@ async function loadState(renderTurns = true) {
     library(data);
     renderModel(data);
     renderMemoryPanel(data);
-    if (renderTurns) {
-      data.turns.forEach(turn);
-      scrollThread();
-    }
+    if (showTurns) renderTurns(data.turns);
     if (staticMode) refreshLibraryStatus();
     byId('send').disabled = staticMode && !data.model;
     if (staticMode && !data.model && !keyPrompted) {
@@ -454,6 +543,119 @@ async function loadState(renderTurns = true) {
   } catch (error) {
     byId('status').textContent = error.message;
     byId('presence').textContent = '连接失败';
+  }
+}
+
+let historyGroups = [];
+let selectedHistoryDate = '';
+function analyzeHistory(turns) {
+  const grouped = new Map();
+  (Array.isArray(turns) ? turns : []).filter(Array.isArray).forEach(item => {
+    const key = createdDateKey(item[3]);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(item);
+  });
+  return [...grouped.entries()].sort((left, right) => right[0].localeCompare(left[0]));
+}
+function historyMessage(parent, name, text, kind) {
+  const row = document.createElement('div');
+  row.className = 'history-message ' + kind;
+  const who = document.createElement('b');
+  who.textContent = name;
+  const reply = splitStickerMessage(text);
+  if (reply.body) {
+    const body = document.createElement('p');
+    body.textContent = reply.body;
+    row.append(who, body);
+  } else {
+    row.append(who);
+  }
+  if (reply.sticker) {
+    const sticker = document.createElement('span');
+    sticker.className = 'history-sticker';
+    sticker.textContent = reply.sticker;
+    row.append(sticker);
+  }
+  parent.append(row);
+}
+function renderHistoryDates() {
+  const nav = byId('history-dates');
+  nav.replaceChildren();
+  historyGroups.forEach(([key, turns], index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'history-date';
+    button.dataset.date = key;
+    button.setAttribute('aria-pressed', String(key === selectedHistoryDate));
+    const label = document.createElement('span');
+    label.textContent = shortDateLabel(key);
+    const count = document.createElement('small');
+    count.textContent = turns.length + ' 轮' + (index === 0 ? ' · 最近' : '');
+    button.append(label, count);
+    nav.append(button);
+  });
+}
+function renderHistoryDay(key) {
+  const section = byId('history-turns');
+  const turns = historyGroups.find(item => item[0] === key)?.[1] || [];
+  section.replaceChildren();
+  if (!turns.length) return;
+  turns.forEach(([id, question, answer, created], index) => {
+    const card = document.createElement('article');
+    card.className = 'history-turn';
+    const head = document.createElement('header');
+    const time = document.createElement('time');
+    time.textContent = String(created || '').split('T')[1]?.slice(0,5) || '--:--';
+    const sequence = document.createElement('span');
+    sequence.textContent = '第 ' + (index + 1) + ' 轮 · #' + id;
+    head.append(time, sequence);
+    historyMessage(card, '我', question, 'mine');
+    historyMessage(card, '大肥鱼', answer, 'bot');
+    card.prepend(head);
+    section.append(card);
+  });
+}
+function setHistorySelection(key) {
+  selectedHistoryDate = key;
+  renderHistoryDates();
+  renderHistoryDay(key);
+  const count = historyGroups.find(item => item[0] === key)?.[1].length || 0;
+  byId('history-state').textContent = dateLabel(key) + ' · ' + count + ' 轮 · 只保存在这台设备';
+}
+function useHistoryTurns(turns, note = '') {
+  historyGroups = analyzeHistory(turns);
+  byId('history-turns').replaceChildren();
+  if (!historyGroups.length) {
+    selectedHistoryDate = '';
+    renderHistoryDates();
+    byId('history-state').textContent = '还没有聊天记录。开始聊天后，这里会按日期整理。';
+    return;
+  }
+  if (!historyGroups.some(item => item[0] === selectedHistoryDate)) {
+    selectedHistoryDate = historyGroups[0][0];
+  }
+  renderHistoryDates();
+  renderHistoryDay(selectedHistoryDate);
+  const count = historyGroups.find(item => item[0] === selectedHistoryDate)?.[1].length || 0;
+  byId('history-state').textContent = note || (dateLabel(selectedHistoryDate) + ' · ' + count + ' 轮 · 只保存在这台设备');
+}
+async function openHistory() {
+  const dialog = byId('history-panel');
+  if (!dialog.open) dialog.showModal();
+  const button = byId('history');
+  button.disabled = true;
+  byId('history-state').textContent = '正在读取聊天历史…';
+  try {
+    const data = await api('/history', {});
+    useHistoryTurns(data.turns);
+  } catch (error) {
+    if (Array.isArray(stateData.turns) && stateData.turns.length) {
+      useHistoryTurns(stateData.turns, '完整历史暂时读取失败，先显示最近的记录。');
+    } else {
+      byId('history-state').textContent = error.message;
+    }
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -535,6 +737,12 @@ document.addEventListener('click', event => {
 
 byId('web').onclick = () => setWeb(!webEnabled, true);
 byId('deep').onclick = () => setDeep(!deepEnabled, true);
+byId('history').onclick = openHistory;
+byId('history-close').onclick = () => byId('history-panel').close();
+byId('history-dates').onclick = event => {
+  const button = event.target.closest('[data-date]');
+  if (button) setHistorySelection(button.dataset.date);
+};
 byId('settings').onclick = () => {
   byId('panel').showModal();
   refreshMemories();

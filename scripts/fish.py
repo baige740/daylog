@@ -79,6 +79,39 @@ MEMORY_SENSITIVE = re.compile(
     r"akia[0-9a-z]{16}|\b\d{17}[\dx]\b|\b(?:\d[ -]?){15,19}\b)",
     re.I,
 )
+STICKERS = ("🐟💨", "🐳🌊", "🐡💛", "💙✨")
+
+
+def choose_sticker(text):
+    if re.search(r"饿|吃|饭|馋|好吃", text):
+        return "🐡💛"
+    if re.search(r"得意|厉害|夸|开心|好耶|牛|棒", text):
+        return "💙✨"
+    if re.search(r"困|睡|晚安|委屈|累", text):
+        return "🐳🌊"
+    return "🐟💨"
+
+
+def with_natural_sticker(question, answer, recent_answers):
+    text = str(answer or "").strip()
+    if not text or any(sticker in text for sticker in STICKERS):
+        return text
+    if any(any(sticker in str(item or "") for sticker in STICKERS) for item in recent_answers[-3:]):
+        return text
+    explicit = question.strip() in STICKERS or bool(re.search(r"贴纸|表情包|发表情", question))
+    emoji_only = len(question.strip()) <= 12 and any(ord(char) >= 0x1F000 for char in question)
+    social = explicit or emoji_only or bool(re.search(
+        r"你好|您好|嗨|哈喽|在吗|哈哈|笑死|可爱|厉害|摸鱼|饿了|吃饭|好吃|晚安|早安|睡|想我|喜欢|谢谢|开心|好耶|委屈|嫌弃|傲娇|小鲸鱼|大肥鱼|干嘛|做什么",
+        question,
+    ))
+    serious = bool(re.search(
+        r"股票|大盘|A股|港股|美股|基金|财报|经济|通胀|利率|汇率|美联储|投资|仓位|买入|卖出|止损|李大霄|上市|营收|政策|PMI|GDP|CPI|房价|黄金|行业|市场",
+        question + " " + text,
+        re.I,
+    ))
+    if not social or (serious and not explicit):
+        return text
+    return text + "\n" + choose_sticker(question + " " + text)
 
 
 def clean_text(value, limit=500):
@@ -717,6 +750,9 @@ def chat(db, question, use_web=False, deep=False):
             "涉及实时信息时，优先使用给出的网页搜索结果，并在正文中用 [1][2] 这样的编号标注来源；"
             "不要编造网页摘要中没有的事实，也不要把搜索摘要当成完整全文。"
             "如果网页搜索没有返回结果或失败，必须明确说明无法确认最新情况。"
+            "\n\n表情包只用这四种：🐟💨、🐳🌊、🐡💛、💙✨。"
+            "开心、得意、嫌弃、委屈、被夸、开玩笑或我发贴纸时，可以在正常短句的下一行单独发一张；"
+            "一次最多一张，大约每三四轮配一张。股票、宏观等严肃问题不硬贴，也不要自创其他贴纸格式。"
         )
         if deep:
             system += (
@@ -759,6 +795,8 @@ def chat(db, question, use_web=False, deep=False):
             "不要重复粘贴长网址，界面会在回答下方展示来源链接。"
         )})
         answer, _, elapsed_ms = call_model(db, messages, deep=deep, timeout=180 if deep else 60)
+        recent_answers = [row[0] for row in db.execute("SELECT answer FROM turns ORDER BY id DESC LIMIT 3")]
+        answer = with_natural_sticker(question, answer, recent_answers)
         deep_used = bool(deep)
     else:
         if web_results:
@@ -818,6 +856,7 @@ def state_payload(db):
         memory_last=settings.get("memory_last"),
         memories=list_memories(db),
         turns=load_turns(db),
+        turn_total=db.execute("SELECT COUNT(*) FROM turns").fetchone()[0],
     )
 
 
@@ -858,6 +897,9 @@ class Handler(SimpleHTTPRequestHandler):
             with closing(connect()) as db, db:
                 if self.path == "/api/fish/state":
                     result = state_payload(db)
+                elif self.path == "/api/fish/history":
+                    turns = load_turns(db, 500)
+                    result = dict(turns=turns, total=len(turns))
                 elif self.path == "/api/fish/chat":
                     question = payload["text"].strip()
                     if not 0 < len(question) <= 8000:

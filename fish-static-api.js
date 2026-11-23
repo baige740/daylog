@@ -5,6 +5,8 @@ const MEMORIES_KEY = "daylog:fish:memories:v1";
 const DEFAULT_MODEL_URL = "https://api.deepseek.com/v1/chat/completions";
 const DEFAULT_MODEL_NAME = "deepseek-flash";
 const DEFAULT_ROLE = "你叫大肥鱼，偶尔自称小鲸鱼。你是主人的聊天搭子，不是客服。像在 QQ 或微信上一样用中文短句聊天；先看事实和资料，再下判断，不编造实时行情、新闻或私人记忆。";
+const STICKERS = ["🐟💨", "🐳🌊", "🐡💛", "💙✨"];
+const MAX_TURNS = 320;
 const SENSITIVE = /(?:sk-[a-z0-9_-]{12,}|api[_ -]?key|access[_ -]?token|secret|password|密码|口令|身份证|银行卡|信用卡|护照号|cvv|私钥|gh[pousr]_[a-z0-9]{20,}|github_pat_[a-z0-9_]{20,}|eyj[a-z0-9_-]{10,}\.[a-z0-9_-]{10,}\.[a-z0-9_-]{10,}|akia[0-9a-z]{16}|\b\d{17}[\dx]\b|\b(?:\d[ -]?){15,19}\b)/i;
 
 let libraryPromise = null;
@@ -109,7 +111,7 @@ function readTurns() {
 }
 
 function writeTurns(turns) {
-  writeJson(TURNS_KEY, turns.slice(-120));
+  writeJson(TURNS_KEY, turns.slice(-MAX_TURNS));
 }
 
 function readMemories() {
@@ -159,6 +161,33 @@ function tokens(text) {
     }
   }
   return [...new Set(pieces)].filter(Boolean);
+}
+
+function hasSticker(text) {
+  return STICKERS.some(sticker => String(text || "").includes(sticker));
+}
+function chooseSticker(text) {
+  if (/(饿|吃|饭|馋|好吃)/.test(text)) return "🐡💛";
+  if (/(得意|厉害|夸|开心|好耶|牛|棒)/.test(text)) return "💙✨";
+  if (/(困|睡|晚安|委屈|累)/.test(text)) return "🐳🌊";
+  return "🐟💨";
+}
+function withNaturalSticker(question, answer, turns) {
+  const text = String(answer || "").trim();
+  if (!text || hasSticker(text)) return text;
+  const recent = turns.slice(-3).some(item => hasSticker(item?.[2]));
+  if (recent) return text;
+  const explicit = STICKERS.includes(question.trim()) || /(贴纸|表情包|发表情)/.test(question);
+  let emojiOnly = false;
+  try {
+    emojiOnly = /^\p{Extended_Pictographic}[\p{Extended_Pictographic}\p{Emoji_Component}\u200d\ufe0f\s]*$/u.test(question.trim());
+  } catch {
+    emojiOnly = false;
+  }
+  const social = explicit || emojiOnly || /(你好|您好|嗨|哈喽|在吗|哈哈|笑死|可爱|厉害|摸鱼|饿了|吃饭|好吃|晚安|早安|睡|想我|喜欢|谢谢|开心|好耶|委屈|嫌弃|傲娇|小鲸鱼|大肥鱼|干嘛|做什么)/i.test(question);
+  const serious = /(股票|大盘|A股|港股|美股|基金|财报|经济|通胀|利率|汇率|美联储|投资|仓位|买入|卖出|止损|李大霄|上市|营收|政策|PMI|GDP|CPI|房价|黄金|行业|市场)/i.test(question + " " + text);
+  if (!social || (serious && !explicit)) return text;
+  return text + "\n" + chooseSticker(question + " " + text);
 }
 
 function skipMaterialSearch(question) {
@@ -558,6 +587,7 @@ function libraryPayload(library) {
 
 function statePayload() {
   const current = settings();
+  const turns = readTurns();
   return {
     role: current.role || DEFAULT_ROLE,
     updated: loadedLibrary?.generated || "",
@@ -573,7 +603,8 @@ function statePayload() {
     memory_enabled: current.memoryEnabled,
     memory_last: current.memoryLast,
     memories: listMemories(),
-    turns: readTurns().slice(-80),
+    turns: turns.slice(-80),
+    turn_total: turns.length,
     server_managed: false,
     static_mode: true,
   };
@@ -600,6 +631,7 @@ async function chat(payload, library) {
     + (deep
       ? "\n\n本轮已开启深度思考。请先检查问题前提、证据和反例，再给出结论；不要展示内部思维过程。"
       : "")
+    + "\n\n表情包只用这四种：🐟💨、🐳🌊、🐡💛、💙✨。开心、得意、嫌弃、委屈、被夸、开玩笑或我发贴纸时，可以在正常短句的下一行单独发一张；一次最多一张，大约每三四轮配一张。股票、宏观等严肃问题不硬贴，也不要自创其他贴纸格式。"
     + memoryPrompt(current);
   const messages = [{ role: "system", content: system }];
   for (const [previous, answer] of readTurns().slice(-4).map(item => [item[1], item[2]])) {
@@ -619,6 +651,7 @@ async function chat(payload, library) {
   });
   const result = await callModel(current, messages, deep, 0, deep ? 120 : searchAvailable ? 90 : 35, searchAvailable);
   const turns = readTurns();
+  result.answer = withNaturalSticker(question, result.answer, turns);
   const id = turns.reduce((max, item) => Math.max(max, Number(item[0]) || 0), 0) + 1;
   const created = beijingStamp();
   const turn = [id, question, result.answer, created, result.sources, deep ? 1 : 0, result.elapsed];
@@ -693,6 +726,10 @@ export function createStaticApi() {
       }
       case "/library": {
         return libraryPayload(await loadLibrary(payload?.refresh === true));
+      }
+      case "/history": {
+        const turns = readTurns();
+        return { turns, total: turns.length };
       }
       case "/chat": {
         let library = null;
