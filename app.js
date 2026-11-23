@@ -14,7 +14,7 @@ const editorSurface=$('#editor-surface'),contextButton=$('#locate-weather'),mood
 const tabs=[['note','dotpen'],['trade','activity'],['reflect','bulb'],['quote','quote']];
 const places={
   home:['今日总览','grid'],history:['记录时间线','history'],favorites:['我的收藏','bookmark'],
-  stats:['记录统计','chart'],
+  reading:['阅读','book'],stats:['记录统计','chart'],
   trading:['交易与反思','#799e83',['trade','reflect']],life:['日常生活','#c9ac77',['note','poop','pee','water','walk']],feelings:['心情日记','#c58d7f',['mood']],quotes:['金句摘录','#9794b3',['quote']]
 };
 const placeholders={note:'此刻，在想些什么？',trade:'今天观察到了什么？写下判断和理由…',reflect:'回看今天，哪件事值得再想一想？',quote:'摘下一句话，记下它的出处…'};
@@ -48,19 +48,49 @@ function renderNav(){
     $(container).innerHTML=Object.entries(places).filter(([,v])=>(v.length===2)===(k==='main')).map(([id,[label,glyph]])=>'<button class="nav-item '+(view===id?'selected':'')+'" data-view="'+id+'"'+(view===id?' aria-current="page"':'')+'>'+(k==='main'?icon(glyph):'<span class="cat-dot" style="--cat:'+glyph+'"></span>')+label+'</button>').join('')
   }
   $('#mobile-nav').querySelectorAll('[data-view]').forEach(button=>button.classList.toggle('selected',button.dataset.view===view));
-  const mx=$('#main-nav').querySelector('[data-ext="maoxuan"]'); if(!mx){const a=document.createElement('a');a.className='nav-item';a.dataset.ext='maoxuan';a.href='maoxuan/index.html';a.innerHTML=icon('journal')+'毛选阅读';$('#main-nav').appendChild(a)}
 }
 function navigate(next,date=''){
   view=Object.hasOwn(places,next)?next:'home';query='';typeFilter='';dayFilter=date;setMenu(false);
   $('#dashboard').hidden=view!=='home';
-  $('#archive').hidden=!(view!=='home'&&view!=='stats');
+  $('#archive').hidden=!(view!=='home'&&view!=='stats'&&view!=='reading');
   $('#stats').hidden=view!=='stats';
+  $('#reading').hidden=view!=='reading';
   $('#crumb').textContent=places[view][0];document.title='日迹 Daylog · '+places[view][0];
   renderNav();renderRecords();
-  if(view==='stats')renderStats();else if(view!=='home')renderArchive();
+  if(view==='reading')renderReading();else if(view==='stats')renderStats();else if(view!=='home')renderArchive();
   window.scrollTo(0,0);
   if(view==='home')marketRefresh?.()
 }
+const books=[{id:'maoxuan',title:'毛泽东选集',sub:'学习版 · 229 篇 · 第一卷—第四卷',src:'maoxuan/index.html',mark:'毛',stateKey:'mx_study_v1',total:229}];
+function readBookState(key){try{return JSON.parse(localStorage.getItem(key))||{}}catch{return {}}}
+function renderReading(){
+  const shelf=$('#bookshelf');if(!shelf)return;
+  if($('#reader-wrap')&&!$('#reader-wrap').hidden)return;
+  shelf.hidden=false;
+  const cards=books.map(b=>{
+    const st=readBookState(b.stateKey);
+    const readN=st.read?Object.keys(st.read).filter(k=>st.read[k]).length:0;
+    const pct=Math.min(100,Math.round(readN/b.total*100));
+    return '<button class="book-card" type="button" data-book="'+b.id+'"><span class="book-cover" aria-hidden="true">'+esc(b.mark)+'</span><span class="book-info"><h3>'+esc(b.title)+'</h3><span class="book-sub">'+esc(b.sub)+'</span><span class="book-prog"><span class="bar"><i style="width:'+pct+'%"></i></span><span class="pct"><span>已读 '+readN+' / '+b.total+'</span><span>'+pct+'%</span></span></span></span></button>'
+  }).join('');
+  shelf.innerHTML='<div class="shelf-lead"><h1>阅读</h1><p>在日迹里读书：选中文字高亮或写批注，会自动收进「金句摘录」。</p></div><div class="shelf-grid">'+cards+'<div class="book-add">更多书目<br>后续加入</div></div>';
+  shelf.querySelectorAll('[data-book]').forEach(btn=>btn.onclick=()=>openBook(btn.dataset.book));
+}
+function openBook(id){
+  const b=books.find(x=>x.id===id);if(!b)return;
+  $('#bookshelf').hidden=true;
+  const wrap=$('#reader-wrap');wrap.hidden=false;
+  $('#reader-title').textContent=b.title;
+  const frame=$('#reader-frame');
+  if(frame.getAttribute('src')!==b.src)frame.setAttribute('src',b.src);
+}
+function backToShelf(){
+  const wrap=$('#reader-wrap');if(wrap)wrap.hidden=true;
+  const frame=$('#reader-frame');if(frame)frame.setAttribute('src','about:blank');
+  const shelf=$('#bookshelf');if(shelf)shelf.hidden=false;
+  renderReading();
+}
+if($('#reader-back'))$('#reader-back').onclick=backToShelf;
 function renderCal(){
   const y=month.getFullYear(),m=month.getMonth(),offset=(new Date(y,m,1).getDay()+6)%7;
   let cells=['一','二','三','四','五','六','日'].map(v=>'<label>'+v+'</label>').join('')+'<span></span>'.repeat(offset);
