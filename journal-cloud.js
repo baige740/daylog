@@ -6,6 +6,7 @@ const CLOUD_VERSION = 1;
 const KEY_PREFIX = "DAYLOG1.";
 const KEY_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const MAIN_SITE_ORIGIN = "https://daylog-journal-c7w4.caringcatkin4.chatgpt.site";
+const MAX_UPLOAD_BYTES = 24 * 1024 * 1024;
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
@@ -185,11 +186,31 @@ function failure(error) {
   return config;
 }
 
+function responseError(status, detail, response) {
+  const rayId = response.headers.get("cf-ray") || "";
+  const suffix = rayId ? `（云端编号 ${rayId}）` : "";
+  let message = detail;
+  if (!message) {
+    if (status === 401) message = "云端没有接受这份手记的恢复码。";
+    else if (status === 403) message = `云端拒绝了本次备份${suffix}。请关闭网络代理后重试。`;
+    else if (status === 413) message = "备份超过 24 MB，请先在本机导出 JSON 文件留档，再减少大图片后重试。";
+    else if (status === 415) message = "云端不接受这次上传的数据格式。";
+    else if (status === 429) message = "上传太频繁，请稍等一分钟再试。";
+    else if (status === 503) message = "云端加密存储暂时不可用，请稍后重试。";
+    else message = `云端备份失败（HTTP ${status}）${suffix}。`;
+  }
+  return Object.assign(new Error(message), {
+    status,
+    retryable: status === 408 || status === 425 || status === 429 || status >= 500,
+  });
+}
+
 async function request(path, options = {}) {
   let lastError = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    let response = null;
     try {
-      const response = await fetch(apiUrl(path), options);
+      response = await fetch(apiUrl(path), options);
       if (response.status === 404) {
         const error = new Error("云端还没有这份手记的备份。");
         error.status = 404;
@@ -197,19 +218,31 @@ async function request(path, options = {}) {
       }
       if (!response.ok) {
         let detail = "";
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
         try {
-          detail = (await response.json()).error || "";
+          if (contentType.includes("application/json")) {
+            detail = (await response.json()).error || "";
+          } else {
+            const text = (await response.text()).trim();
+            if (text.startsWith("{")) {
+              detail = JSON.parse(text).error || "";
+            }
+          }
         } catch {
-          // Keep the generic message when the server did not return JSON.
+          // The HTTP status and Cloudflare request ID remain useful when the body is HTML.
         }
-        throw new Error(detail || "云端服务暂时不可用，请稍后重试。");
+        throw responseError(response.status, detail, response);
       }
       return await response.json();
     } catch (error) {
       lastError = error;
-      if (error?.status === 404 || attempt === 2) break;
+      const retryable = error?.retryable ?? !(response && response.ok);
+      if (error?.status === 404 || retryable === false || attempt === 2) break;
       await new Promise(resolve => setTimeout(resolve, 600 * (attempt + 1)));
     }
+  }
+  if (lastError?.name === "TypeError") {
+    throw new Error("无法连接云端备份服务器，请检查网络或关闭网络代理后重试。");
   }
   throw lastError || new Error("云端服务暂时不可用，请稍后重试。");
 }
@@ -278,18 +311,26 @@ export async function uploadJournalBackup({ force = false } = {}) {
       return { skipped: true, message, counts };
     }
     const encrypted = await encryptBundle(payload, config.key);
+    const requestBody = JSON.stringify({
+      version: CLOUD_VERSION,
+      digest: hash,
+      counts,
+      payload: encrypted,
+    });
+    const requestBytes = textEncoder.encode(requestBody).byteLength;
+    if (requestBytes > MAX_UPLOAD_BYTES) {
+      const sizeMb = (requestBytes / 1024 / 1024).toFixed(1);
+      throw new Error(
+        `加密后的备份约 ${sizeMb} MB，超过云端 24 MB 上限。请先在本机导出 JSON 文件留档，再减少大图片后重试。`,
+      );
+    }
     const data = await request("/backup", {
       method: "POST",
       headers: {
         Authorization: "Bearer " + config.key,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        version: CLOUD_VERSION,
-        digest: hash,
-        counts,
-        payload: encrypted,
-      }),
+      body: requestBody,
     });
     const success = saveSettings({
       lastHash: hash,

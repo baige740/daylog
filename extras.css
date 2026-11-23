@@ -1106,6 +1106,17 @@ body.article-page .inline-mood-group {
     backdrop-filter: blur(18px);
   }
 
+  body.nav-open #mobile-nav {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  body.nav-open #sidebar {
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+    scroll-padding-bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+
   #mobile-nav button {
     display: grid;
     place-items: center;

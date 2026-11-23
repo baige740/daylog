@@ -540,7 +540,7 @@ function openBackup(){
   openDialog('我的手记本','<section class="cloud-backup" aria-labelledby="cloud-title"><div class="cloud-backup-head"><span class="cloud-mark">'+icon('shield')+'</span><div><b id="cloud-title">GitHub 加密备份</b><p>手记和图片先在设备内加密，云端与 GitHub 只保存无法阅读的密文。</p></div><span class="cloud-phase" id="cloud-phase">准备中</span></div><div class="cloud-summary" id="cloud-summary"></div><div class="cloud-code-box"><label for="cloud-code">换手机恢复码</label><code id="cloud-code"></code></div><div class="backup-row cloud-actions"><button class="primary" id="cloud-now">'+icon('upload')+'立即备份</button><button class="secondary" id="copy-code">复制恢复码</button><button class="secondary" id="download-code">'+icon('download')+'保存恢复码</button></div><details class="cloud-restore"><summary>换手机或从云端恢复</summary><p>粘贴之前保存的恢复码。备份会与这台设备已有记录合并，重复内容自动跳过。</p><label class="field-label" for="restore-code">云端恢复码</label><textarea class="field" id="restore-code" rows="3" autocomplete="off" spellcheck="false" placeholder="DAYLOG1.…"></textarea><button class="primary" id="restore-cloud">'+icon('download')+'从云端恢复</button></details><div id="backup-status" class="backup-status" role="status"></div></section><section class="local-backup"><div class="backup-section-head"><b>本机 JSON 备份</b><span>'+records.length+' 条记录</span></div><p>需要自己保存备份文件时，可导出全部草稿、照片和自定义背景。导入时已有内容会自动跳过。</p><div class="backup-row"><button class="secondary" id="export">'+icon('download')+'导出文件</button><button class="secondary" id="import">'+icon('upload')+'导入文件</button><input type="file" id="backup-file" hidden accept=".json,application/json"></div></section><section class="local-backup"><div class="backup-section-head"><b>访问安全</b><span>当前版本 '+appVersion+'</span></div><p>访问密码只在本机校验，不会随备份上传。手机上可从浏览器菜单添加到主屏幕。</p><div class="backup-row"><button class="secondary" id="change-password">修改访问密码</button><button class="secondary" id="lock-now">立即锁定</button></div></section>');
   const backupStatus=$('#backup-status');
   const cloudPhase=$('#cloud-phase'),cloudSummary=$('#cloud-summary'),cloudCode=$('#cloud-code');
-  const stateLabels={uploading:'正在加密上传',success:'已加密备份',current:'云端已是最新',error:'等待自动重试',empty:'等待首次记录',restored:'恢复完成',code:'恢复码已切换'};
+  const stateLabels={uploading:'正在加密上传',success:'已加密备份',current:'云端已是最新',error:'上传失败',empty:'等待首次记录',restored:'恢复完成',code:'恢复码已切换'};
   const renderCloud=detail=>{
     if(!dialog.open||!cloudPhase)return;
     const state={...getJournalCloudState(),...(detail?.config||{})};
@@ -562,8 +562,10 @@ function openBackup(){
     const button=$('#cloud-now');
     button.disabled=true;backupStatus.textContent='正在整理记录和图片，并在设备内加密…';
     try{
-      await uploadJournalBackup({force:true});
-      backupStatus.textContent='加密备份已上传。GitHub 会在下一次定时镜像时同步最新密文。';
+      const result=await uploadJournalBackup({force:true});
+      backupStatus.textContent=result.skipped
+        ?result.message
+        :'加密备份已上传。GitHub 会在下一次定时镜像时同步最新密文。';
     }catch(error){
       backupStatus.textContent=error instanceof Error?error.message:'自动备份失败，联网后会自动重试。';
     }finally{button.disabled=false}
