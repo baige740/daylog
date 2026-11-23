@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#eef4ee"><title>修复大肥鱼旧版缓存 · 日迹</title><link rel="icon" href="fish-avatar.webp" type="image/webp"><style>
+:root{--ink:#243b31;--muted:#6b7f72;--green:#185c49;--line:#dbe6dc;--bg:#e9f0e9}
+*{box-sizing:border-box}
+body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:24px 16px max(24px,env(safe-area-inset-bottom));color:var(--ink);background:radial-gradient(circle at 12% 8%,#f3f8f1 0,transparent 36%),radial-gradient(circle at 88% 92%,#dfece2 0,transparent 40%),var(--bg);font:16px/1.7 system-ui,"Microsoft YaHei","PingFang SC",sans-serif}
+main{width:min(460px,100%);padding:28px 24px 24px;border:1px solid var(--line);border-radius:20px;background:#fbfdf9f2;box-shadow:0 20px 60px #183b2b1f;text-align:center}
+img{width:82px;height:82px;border-radius:50%;object-fit:cover;box-shadow:0 8px 24px #1b3d2c2b}
+h1{margin:15px 0 7px;font:700 23px/1.35 "Microsoft YaHei","PingFang SC",sans-serif}
+.lead{margin:0;color:var(--muted);font-size:14px}
+.keep{display:grid;gap:7px;margin:20px 0;padding:14px 15px;border:1px solid #dce8dd;border-radius:13px;background:#f2f7f2;text-align:left}
+.keep b{font-size:13px;color:#315f48}
+.keep span{font-size:12px;line-height:1.6;color:#617669}
+#state{min-height:44px;margin:0;padding:12px 14px;border-radius:11px;background:#edf4ed;color:#315f48;font-size:14px;font-weight:600}
+#state.error{background:#fff1ed;color:#8c4638}
+.actions{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:16px}
+a,button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:9px 16px;border:1px solid #c9dccd;border-radius:11px;color:var(--green);background:#edf5ee;font:inherit;font-size:14px;font-weight:650;text-decoration:none;cursor:pointer}
+a.primary{color:#fff;background:var(--green);border-color:var(--green)}
+a.primary:hover{background:#114d3d}
+.small{margin:14px 0 0;color:#84968a;font-size:11px;line-height:1.6}
+</style></head>
+<body><main>
+<img src="fish-avatar.webp" alt="大肥鱼">
+<h1>修复旧版缓存</h1>
+<p class="lead">如果手机里一直没有「记录」按钮、日期历史或贴纸，通常是旧网页缓存还在接管页面。</p>
+<div class="keep"><b>这些内容不会被删除</b><span>聊天记录、角色提示词、模型 Key、长期记忆都保存在浏览器的本地数据里；这里只清理网页文件和旧 Service Worker。</span></div>
+<p id="state" role="status">正在清理旧版缓存…</p>
+<div class="actions"><a id="latest" class="primary" href="fish.html">打开最新版</a></div>
+<p class="small">清理完成后会自动进入大肥鱼。若没有自动跳转，请点上面的按钮。</p>
+</main>
+<script>
+(() => {
+  const state = document.getElementById("state");
+  const latest = document.getElementById("latest");
+  const stamp = Date.now().toString(36);
+  const localStatic = new URLSearchParams(location.search).has("static") ? "&static" : "";
+  latest.href = "./fish.html?fresh=" + stamp + localStatic;
+
+  async function clearOldShell() {
+    let workers = 0;
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (const registration of registrations) {
+        if (await registration.unregister()) workers += 1;
+      }
+    }
+
+    let shells = 0;
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      for (const key of keys) {
+        if (key.startsWith("daylog-shell-") && await caches.delete(key)) shells += 1;
+      }
+    }
+    return { workers, shells };
+  }
+
+  (async () => {
+    try {
+      const { workers, shells } = await clearOldShell();
+      localStorage.setItem("daylog:cache:repaired", new Date().toISOString());
+      state.textContent = "旧版缓存已清理"
+        + (shells ? "（" + shells + " 组）" : "")
+        + (workers ? "，旧后台已退出" : "")
+        + "。正在打开最新版…";
+      setTimeout(() => location.replace(latest.href), 900);
+    } catch (error) {
+      state.classList.add("error");
+      state.textContent = "自动清理没有完成：" + (error?.message || "浏览器拒绝访问缓存") + "。可以手动打开最新版；聊天记录和角色仍保留。";
+      console.error("大肥鱼缓存修复失败", error);
+    }
+  })();
+})();
+</script>
+</body></html>

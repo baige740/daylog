@@ -87,6 +87,7 @@ dialog{color:inherit;width:min(480px,94vw);max-height:90dvh;border:0;padding:22p
 .history-message.mine p{background:#edf6ea;border-color:#dcebd9}
 .history-sticker{justify-self:start;margin-top:2px;font-size:31px;line-height:1.25;animation:sticker-pop .35s ease-out}
 .history-state{min-height:18px;margin:10px 1px 0;color:#76897b;font-size:11px;line-height:1.45}
+.reset-link{color:#315f48;text-decoration:underline;text-underline-offset:2px}.reset-link:hover{color:var(--green)}
 label,h3{display:block;font-weight:650;margin:12px 0 6px}h3{font-size:15px;margin-top:0}hr{border:0;border-top:1px solid var(--line);margin:20px 0}
 input,select,textarea{font:inherit;color:inherit;background:#fff;border:1px solid #bfcfc4;border-radius:8px;padding:8px;width:100%;max-width:100%}input,select{margin-bottom:12px}label+textarea{margin-bottom:10px}
 select{background:#fff}.model-actions{display:flex;gap:8px}.model-actions .accent{background:var(--green);color:#fff}
