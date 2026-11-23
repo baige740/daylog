@@ -136,6 +136,106 @@ function hourChart(hours) {
   return '<div class="hour-chart" role="img" aria-label="本月二十四小时记录分布">' + bars + "</div>";
 }
 
+function lifeStats(records, selected, now = new Date()) {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const start = new Date(today);
+  start.setDate(start.getDate() - 6);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const last30Start = new Date(today);
+  last30Start.setDate(last30Start.getDate() - 29);
+  const recent = recordsBetween(records, start, tomorrow);
+  const last30 = recordsBetween(records, last30Start, tomorrow);
+  const events = records
+    .filter(record => record.type === "poop" || record.type === "pee")
+    .sort((left, right) => right.at.localeCompare(left.at));
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    const key = dateKey(date);
+    const daily = recent.filter(record => dateKey(record.at) === key);
+    return {
+      key,
+      date,
+      poop: daily.filter(record => record.type === "poop").length,
+      pee: daily.filter(record => record.type === "pee").length,
+      offset: index,
+    };
+  });
+  const todayRecords = recordsBetween(records, today, tomorrow);
+  const monthly = selected.filter(record => record.type === "poop" || record.type === "pee");
+  return {
+    today,
+    days,
+    todayPoop: todayRecords.filter(record => record.type === "poop").length,
+    todayPee: todayRecords.filter(record => record.type === "pee").length,
+    weekPoop: recent.filter(record => record.type === "poop").length,
+    weekPee: recent.filter(record => record.type === "pee").length,
+    monthPoop: monthly.filter(record => record.type === "poop").length,
+    monthPee: monthly.filter(record => record.type === "pee").length,
+    last30Poop: last30.filter(record => record.type === "poop").length,
+    last30Pee: last30.filter(record => record.type === "pee").length,
+    latest: events[0] || null,
+  };
+}
+
+function lifeTrendChart(days) {
+  const maximum = Math.max(1, ...days.flatMap(day => [day.poop, day.pee]));
+  const bars = days.map(day => {
+    const poopHeight = day.poop ? Math.max(12, Math.round(day.poop / maximum * 100)) : 3;
+    const peeHeight = day.pee ? Math.max(12, Math.round(day.pee / maximum * 100)) : 3;
+    const label = day.offset === 6
+      ? "今天"
+      : day.offset === 5
+        ? "昨天"
+        : (day.date.getMonth() + 1) + "/" + day.date.getDate();
+    return '<button type="button" class="life-chart-day'
+      + (day.offset === 6 ? " is-today" : "")
+      + '" data-stat-day="' + day.key + '" aria-label="' + day.key + "，排便 "
+      + day.poop + " 次，排尿 " + day.pee + ' 次，点击查看当天记录">'
+      + '<span class="life-bar-pair"><i class="life-bar life-bar--poop" style="--life-height:'
+      + poopHeight + '%"></i><i class="life-bar life-bar--pee" style="--life-height:'
+      + peeHeight + '%"></i></span><strong>' + (day.poop + day.pee) + "</strong><small>"
+      + label + "</small></button>";
+  }).join("");
+  return '<div class="life-chart" role="group" aria-label="近七天排便和排尿次数">'
+    + bars + "</div>";
+}
+
+function formatLifeLatest(record) {
+  if (!record) return "还没有生活记录";
+  const date = new Date(record.at);
+  return (record.type === "poop" ? "排便" : "排尿") + " · "
+    + (date.getMonth() + 1) + " 月 " + date.getDate() + " 日 "
+    + date.toLocaleTimeString("zh-CN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+}
+
+function lifeStatsPanel(life) {
+  return '<section class="stats-panel life-stats-panel" aria-labelledby="life-stats-title">'
+    + '<header><div><p>LIFE RHYTHM</p><h2 id="life-stats-title">排便与排尿</h2>'
+    + '<span class="life-month-summary">本月排便 ' + life.monthPoop + " 次 · 排尿 "
+    + life.monthPee + ' 次</span></div><button type="button" class="life-record-link"'
+    + ' data-view="home">' + icon("pen") + '去速记</button></header>'
+    + '<div class="life-metrics">'
+    + '<article class="life-metric life-metric--poop"><span>今天排便</span><strong>'
+    + life.todayPoop + '<small>次</small></strong><i>近 7 天 ' + life.weekPoop + ' 次</i></article>'
+    + '<article class="life-metric life-metric--pee"><span>今天排尿</span><strong>'
+    + life.todayPee + '<small>次</small></strong><i>近 7 天 ' + life.weekPee + ' 次</i></article>'
+    + '<article class="life-metric"><span>近 30 天合计</span><strong>'
+    + (life.last30Poop + life.last30Pee) + '<small>次</small></strong><i>排便 '
+    + life.last30Poop + ' · 排尿 ' + life.last30Pee + '</i></article>'
+    + '<article class="life-metric life-metric--latest"><span>最近一次</span><strong class="life-latest">'
+    + escapeHtml(formatLifeLatest(life.latest)) + '</strong><i>按事件发生时间记录</i></article>'
+    + '</div><div class="life-chart-shell"><div class="life-chart-head"><div><b>近 7 天生活节律</b>'
+    + '<span>点一天可回看当天全部记录</span></div><div class="life-legend">'
+    + '<span><i class="life-bar--poop"></i>排便</span><span><i class="life-bar--pee"></i>排尿</span>'
+    + '</div></div>' + lifeTrendChart(life.days) + '</div></section>';
+}
+
 export function summarizeRecords(records, month) {
   const year = month.getFullYear();
   const monthIndex = month.getMonth();
@@ -171,6 +271,7 @@ export function summarizeRecords(records, month) {
 
 export function renderStatsPage(container, records, month) {
   const summary = summarizeRecords(records, month);
+  const life = lifeStats(records, summary.selected);
   const monthText = summary.year + " 年 " + (summary.monthIndex + 1) + " 月";
   const deltaText = summary.moodDelta === null
     ? "暂无可比上月"
@@ -233,5 +334,7 @@ export function renderStatsPage(container, records, month) {
         hour12: false,
       }))
       : "这个月还没有写下记录")
-    + "</b></div></div></section></div></div>";
+    + "</b></div></div></section></div>"
+    + lifeStatsPanel(life)
+    + "</div>";
 }

@@ -24,6 +24,7 @@ const colors=[['#e7e9f2','#8991ad'],['#e7eef0','#839da4'],['#e9eddb','#93a278'],
 const quotes=[['知之者不如好之者，好之者不如乐之者。','孔子'],['不积跬步，无以至千里。','荀子'],['知人者智，自知者明。','老子'],['吾日三省吾身。','曾子'],['学而不思则罔，思而不学则殆。','孔子']];
 const lightStyleBase={...DEFAULT_STYLE,fontSize:17,lineHeight:1.9,paragraphGap:.82};
 let view='home',dayFilter='',typeFilter='',query='',activeTab='note',smart=localStorage.getItem('daylog:smart')!=='off',month=new Date(),statsMonth=new Date(),records=[],toastTimer,activeDate=dateKey(new Date());
+let marketRefresh=null;
 let currentContext=null,currentMood=null,currentStyle=normalizeStyle(null,lightStyleBase),locationBusy=false;
 let dialogCleanup=null;
 month.setDate(1);
@@ -56,7 +57,8 @@ function navigate(next,date=''){
   $('#crumb').textContent=places[view][0];document.title='日迹 Daylog · '+places[view][0];
   renderNav();renderRecords();
   if(view==='stats')renderStats();else if(view!=='home')renderArchive();
-  window.scrollTo(0,0)
+  window.scrollTo(0,0);
+  if(view==='home')marketRefresh?.()
 }
 function renderCal(){
   const y=month.getFullYear(),m=month.getMonth(),offset=(new Date(y,m,1).getDay()+6)%7;
@@ -171,6 +173,7 @@ function renderRecords(){
   activeDate=dateKey(new Date());records=entries();const today=records.filter(r=>dateKey(r.at)===activeDate);
   $('#today-count').textContent=today.length;$('#today-list').innerHTML=today.length?today.map(entry).join(''):empty('今天的第一页，等你写下','写一条手记，或点击速记，记录就会出现在这里。');
   const lastMood=today.find(r=>r.type==='mood');document.querySelectorAll('.mood').forEach(b=>b.classList.toggle('active',Boolean(lastMood)&&plain(lastMood.html)===feelings[Number(b.dataset.mood)]));
+  updateQuickCounts(today);
   decorateEntries($('#today-list'));
   renderArticleDrafts();renderCal();
   if(view==='stats')renderStats();else if(view!=='home'&&$('#archive-list'))renderArchiveList()
@@ -209,10 +212,18 @@ function moodIcon(i){
 }
 function renderButtons(){
   $('#editor-tabs').innerHTML=tabs.map(([t,g])=>'<button class="tab" data-tab="'+t+'" aria-pressed="'+(activeTab===t)+'">'+icon(g)+types[t]+'</button>').join('');
-  $('#quick-actions').innerHTML=quick.map(([t,g,tone,light,edge])=>'<button class="quick" data-quick="'+t+'" style="--tone:'+tone+';--light:'+light+';--edge:'+edge+'">'+icon(g)+types[t]+'<span class="tiny-plus">+</span></button>').join('');
+  $('#quick-actions').innerHTML=quick.map(([t,g,tone,light,edge])=>'<button class="quick" data-quick="'+t+'" style="--tone:'+tone+';--light:'+light+';--edge:'+edge+'">'+icon(g)+'<span class="quick-copy"><span>'+types[t]+'</span><small class="quick-count">今日 0 次</small></span><span class="tiny-plus">+</span></button>').join('');
   $('#moods').innerHTML=feelings.map((v,i)=>'<button class="mood" data-mood="'+i+'">'+moodIcon(i)+v+'</button>').join('');
   moodButtons.innerHTML=moodPickerMarkup(currentMood);
   $('#smart').setAttribute('aria-pressed',smart)
+}
+function updateQuickCounts(today=records.filter(r=>dateKey(r.at)===dateKey(new Date()))){
+  document.querySelectorAll('#quick-actions [data-quick]').forEach(button=>{
+    const events=today.filter(record=>record.type===button.dataset.quick);
+    const count=button.querySelector('.quick-count');
+    if(count)count.textContent='今日 '+events.length+' 次';
+    button.title=events[0]?'今日 '+events.length+' 次，最近 '+clock(events[0].at):'今日还没有记录';
+  })
 }
 function countWords(){const count=Array.from(plain(editor.innerHTML).replace(/\s/g,'')).length;$('#word-count').textContent=count+' 字';return count}
 function draftInfo(label){$('#draft-state').innerHTML=icon('shield')+esc(label)}
@@ -601,8 +612,9 @@ document.addEventListener('click',e=>{
 document.addEventListener('keydown',e=>{if(e.isComposing)return;if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openSearch()}if((e.ctrlKey||e.metaKey)&&e.key==='Enter'&&document.activeElement===editor){e.preventDefault();save()}if(e.key==='Escape')setMenu(false)});
 window.addEventListener('storage',e=>{if(!e.key||e.key.startsWith('daylog:entry:'))renderRecords();else if(e.key.startsWith(articleDraftPrefix))renderArticleDrafts()});
 function changeDay(){if(activeDate!==dateKey(new Date())){headerDate();renderRecords()}}
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)changeDay()});setInterval(changeDay,30000);
-paintIcons();headerDate();renderButtons();const lastTab=localStorage.getItem('daylog:tab');selectTab(tabs.some(([t])=>t===lastTab)?lastTab:'note',false);navigate('home');startMarket(openDialog,toast);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){changeDay();if(view==='home')marketRefresh?.()}});setInterval(changeDay,30000);
+window.addEventListener('pageshow',()=>{if(view==='home')marketRefresh?.()});
+paintIcons();headerDate();renderButtons();const lastTab=localStorage.getItem('daylog:tab');selectTab(tabs.some(([t])=>t===lastTab)?lastTab:'note',false);navigate('home');startMarket(openDialog,toast).then(refresh=>{marketRefresh=refresh}).catch(()=>null);
 $('#mobile-profile').onclick=openBackup;
 cleanupUnreferencedMedia(entries(),storedDrafts()).catch(()=>null);
 startJournalCloud();

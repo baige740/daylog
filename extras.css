@@ -1438,6 +1438,301 @@ body.article-page .inline-mood-group {
 .article-photos { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(96px,100%),1fr)); gap:6px; margin:8px 0; }
 .article-photos img { display:block; width:100%; height:85px; object-fit:cover; border-radius:8px; }
 .photo-trigger { display:block; width:100%; padding:0; border:0; border-radius:8px; background:transparent; cursor:zoom-in; }
+
+.life-stats-panel {
+  margin-top: 15px;
+  overflow: hidden;
+}
+
+.life-stats-panel > header {
+  align-items: center;
+}
+
+.life-month-summary {
+  display: block;
+  margin-top: 5px;
+  color: var(--stats-muted);
+  font-size: 11px;
+}
+
+.life-record-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid #d7e4d9;
+  border-radius: 999px;
+  background: #f2f8f2;
+  color: #3d6c53;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.life-record-link svg {
+  width: 14px;
+  height: 14px;
+}
+
+.life-record-link:hover {
+  background: #e8f2e9;
+}
+
+.life-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 16px;
+}
+
+.life-metric {
+  min-width: 0;
+  min-height: 104px;
+  padding: 13px 14px;
+  border: 1px solid #e4ebe5;
+  border-radius: 12px;
+  background: #f8faf7;
+}
+
+.life-metric--poop {
+  border-color: #ead9c9;
+  background: #fbf5ed;
+}
+
+.life-metric--pee {
+  border-color: #e6e0c8;
+  background: #fbf9ee;
+}
+
+.life-metric > span {
+  display: block;
+  color: #7d8a81;
+  font-size: 10px;
+}
+
+.life-metric > strong {
+  display: block;
+  margin-top: 7px;
+  color: #2d493c;
+  font-family: "LXGW WenKai Lite", Georgia, serif;
+  font-size: 31px;
+  font-weight: 550;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.life-metric > strong small {
+  margin-left: 3px;
+  color: #849187;
+  font-family: Inter, "PingFang SC", sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.life-metric > i {
+  display: block;
+  margin-top: 7px;
+  color: #8b978f;
+  font-size: 9px;
+  font-style: normal;
+  line-height: 1.45;
+}
+
+.life-metric .life-latest {
+  margin-top: 9px;
+  font-family: Inter, "PingFang SC", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.life-chart-shell {
+  margin-top: 13px;
+  padding: 15px 16px 12px;
+  border: 1px solid #e6ece6;
+  border-radius: 13px;
+  background: linear-gradient(180deg, #fbfcfa, #f7faf6);
+}
+
+.life-chart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.life-chart-head b,
+.life-chart-head span {
+  display: block;
+}
+
+.life-chart-head b {
+  color: #445d50;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.life-chart-head > div:first-child > span {
+  margin-top: 3px;
+  color: #929d96;
+  font-size: 9px;
+}
+
+.life-legend {
+  display: flex;
+  gap: 12px;
+  color: #7d8b82;
+  font-size: 9px;
+}
+
+.life-legend span {
+  display: flex !important;
+  align-items: center;
+  gap: 5px;
+}
+
+.life-legend i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.life-legend .life-bar--poop {
+  background: #b27a50;
+}
+
+.life-legend .life-bar--pee {
+  background: #c5a33f;
+}
+
+.life-chart {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  align-items: end;
+  min-height: 130px;
+  margin-top: 11px;
+  padding-top: 4px;
+}
+
+.life-chart-day {
+  min-width: 0;
+  min-height: 118px;
+  display: grid;
+  grid-template-rows: 78px auto auto;
+  justify-items: center;
+  align-items: end;
+  gap: 3px;
+  padding: 3px 2px 2px;
+  border-radius: 8px;
+  color: #7d8b82;
+}
+
+.life-chart-day:hover,
+.life-chart-day.is-today {
+  background: #edf4ed;
+}
+
+.life-chart-day.is-today {
+  box-shadow: inset 0 0 0 1px #d3e1d5;
+}
+
+.life-bar-pair {
+  width: 100%;
+  height: 78px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  border-bottom: 1px solid #dfe7e0;
+}
+
+.life-bar {
+  display: block;
+  width: min(28%, 9px);
+  min-height: 2px;
+  height: var(--life-height);
+  border-radius: 4px 4px 1px 1px;
+}
+
+.life-bar--poop {
+  background: linear-gradient(to top, #96613f, #c39063);
+}
+
+.life-bar--pee {
+  background: linear-gradient(to top, #a58a32, #d6bc63);
+}
+
+.life-chart-day strong {
+  color: #53675a;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.life-chart-day small {
+  max-width: 100%;
+  overflow: hidden;
+  color: #8d9991;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+  .life-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 430px) {
+  .life-stats-panel {
+    padding-inline: 12px;
+  }
+
+  .life-stats-panel > header {
+    align-items: flex-start;
+  }
+
+  .life-metrics {
+    gap: 7px;
+  }
+
+  .life-metric {
+    min-height: 96px;
+    padding: 11px;
+  }
+
+  .life-metric > strong {
+    font-size: 27px;
+  }
+
+  .life-metric .life-latest {
+    font-size: 12px;
+  }
+
+  .life-chart-shell {
+    padding: 13px 9px 10px;
+  }
+
+  .life-chart-head {
+    gap: 7px;
+  }
+
+  .life-chart {
+    gap: 2px;
+  }
+
+  .life-chart-day {
+    padding-inline: 0;
+  }
+
+  .life-bar-pair {
+    gap: 2px;
+  }
+}
 dialog.photo-viewer[open] { position:fixed; inset:0; display:grid; place-items:center; box-sizing:border-box; width:100%; height:100%; max-width:none; max-height:none; margin:0; padding:0; border:0; border-radius:0; background:#101512; }
 .photo-viewer img { display:block; width:100%; height:100vh; height:100dvh; object-fit:contain; pointer-events:none; }
 .photo-viewer button { position:absolute; top:max(12px,env(safe-area-inset-top)); right:max(12px,env(safe-area-inset-right)); min-height:44px; padding:0 16px; border:1px solid #ffffff70; border-radius:24px; background:#18221ce6; color:white; }

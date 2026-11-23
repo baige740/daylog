@@ -96,3 +96,32 @@ dialog:has(.cloud-backup){width:min(590px,calc(100% - 24px))}
   .local-backup{margin-top:15px;padding-top:14px}
 }
 @media(prefers-reduced-motion:reduce){.cloud-phase[data-phase=uploading]:before{animation:none}}
+
+.market-breadth{position:relative;z-index:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:10px 0 2px;padding:6px 7px;border:1px solid #e5ebe5;border-radius:8px;background:#f8faf6;font-variant-numeric:tabular-nums}
+.market-breadth-title{grid-column:1/-1;color:#7b8b80;font-size:9px;font-weight:600;letter-spacing:.04em}
+.market-breadth>span:not(.market-breadth-title){display:flex;align-items:baseline;gap:3px;min-width:0}
+.market-breadth small{color:#88958c;font-size:9px;font-weight:500}
+.market-breadth b{font:650 14px/1.2 Inter,"Segoe UI",sans-serif;letter-spacing:-.04em}
+.market-breadth .is-up,.dialog-breadth .is-up{color:#b64d43}
+.market-breadth .is-down,.dialog-breadth .is-down{color:#268165}
+.market-breadth .is-flat,.dialog-breadth .is-flat{color:#78867d}
+.market-breadth.is-pending{display:block;color:#89978e;font-size:9px;line-height:1.45;text-align:center}
+.dialog-breadth{display:flex;flex-wrap:wrap;gap:7px;font-variant-numeric:tabular-nums}
+.dialog-breadth b{padding:4px 7px;border-radius:6px;background:#f4f7f3;font-size:12px;font-weight:650}
+#market-state{max-width:min(48vw,410px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#market-state[data-stale=true]{color:#84654a}
+.quick-copy{display:grid;min-width:0;text-align:left;line-height:1.2}
+.quick-count{margin-top:2px;color:#7d877f;font-size:9px;font-weight:500;white-space:nowrap}
+@media(max-width:640px){
+  .market-card{min-height:110px}
+  .market-breadth{margin-top:7px;padding:5px 6px;gap:2px}
+  .market-breadth-title{font-size:8px}
+  .market-breadth>span:not(.market-breadth-title){display:grid;grid-template-columns:auto 1fr;gap:2px}
+  .market-breadth b{font-size:12px}
+  .market-breadth small{font-size:8px}
+  #market-state{max-width:58vw;font-size:10px}
+  .quick{justify-content:flex-start;padding:8px 5px;gap:4px}
+  .quick svg{width:15px;height:15px;flex:0 0 15px}
+  .quick-copy>span{font-size:11px;white-space:nowrap}
+  .quick-count{font-size:8px;margin-top:1px}
+}
