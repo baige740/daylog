@@ -48,6 +48,7 @@ function renderNav(){
     $(container).innerHTML=Object.entries(places).filter(([,v])=>(v.length===2)===(k==='main')).map(([id,[label,glyph]])=>'<button class="nav-item '+(view===id?'selected':'')+'" data-view="'+id+'"'+(view===id?' aria-current="page"':'')+'>'+(k==='main'?icon(glyph):'<span class="cat-dot" style="--cat:'+glyph+'"></span>')+label+'</button>').join('')
   }
   $('#mobile-nav').querySelectorAll('[data-view]').forEach(button=>button.classList.toggle('selected',button.dataset.view===view));
+  const mx=$('#main-nav').querySelector('[data-ext="maoxuan"]'); if(!mx){const a=document.createElement('a');a.className='nav-item';a.dataset.ext='maoxuan';a.href='maoxuan/index.html';a.innerHTML=icon('journal')+'毛选阅读';$('#main-nav').appendChild(a)}
 }
 function navigate(next,date=''){
   view=Object.hasOwn(places,next)?next:'home';query='';typeFilter='';dayFilter=date;setMenu(false);

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>毛泽东选集 · 学习版</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body data-theme="paper">
+  <!-- ===== 顶栏 ===== -->
+  <header class="topbar">
+    <button class="icon-btn only-mobile" id="toggleSidebar" title="目录">☰</button>
+    <div class="brand">
+      <span class="brand-mark">毛</span>
+      <span class="brand-text">毛泽东选集<small>· 学习版</small></span>
+    </div>
+
+    <div class="search-wrap">
+      <span class="search-ico">🔍</span>
+      <input id="globalSearch" type="search" inputmode="search" autocomplete="off" autocorrect="off" autocapitalize="off" placeholder="搜索文章标题或正文…（支持全文）">
+      <button class="search-clear hidden" id="searchClear" title="清除">✕</button>
+      <div class="search-results hidden" id="searchResults"></div>
+    </div>
+
+    <div class="top-actions" id="topActions">
+      <button class="icon-btn" id="btnOverview" title="总览 / 关于毛选">📖</button>
+      <button class="icon-btn only-mobile" id="btnMore" title="更多功能">⋯</button>
+      <div class="top-actions-menu" id="topMenu">
+        <button class="icon-btn" id="btnTheme" title="切换主题">🎨</button>
+        <button class="icon-btn" id="btnSettings" title="阅读设置">⚙</button>
+        <button class="icon-btn" id="btnExport" title="导出学习记录">⬇</button>
+        <button class="icon-btn" id="btnImport" title="导入学习记录">⬆</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json" class="hidden">
+    </div>
+  </header>
+
+  <div class="scrim" id="scrim"></div>
+
+  <div class="layout">
+    <!-- ===== 左侧边栏 ===== -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-tabs">
+        <button class="tab active" data-tab="toc">目录</button>
+        <button class="tab" data-tab="theme">主题</button>
+        <button class="tab" data-tab="time">时间线</button>
+        <button class="tab" data-tab="bm">书签 <span class="badge" id="bmCount">0</span></button>
+        <button class="tab" data-tab="notes">笔记 <span class="badge" id="noteCount">0</span></button>
+      </div>
+
+      <div class="sidebar-toolbar">
+        <input id="tocFilter" type="text" placeholder="筛选本卷文章…">
+        <div class="read-stat" id="readStat">已读 0 / 0</div>
+      </div>
+
+      <div class="sidebar-body">
+        <div class="panel active" id="panel-toc"></div>
+        <div class="panel" id="panel-theme"></div>
+        <div class="panel" id="panel-time"></div>
+        <div class="panel" id="panel-bm"></div>
+        <div class="panel" id="panel-notes"></div>
+      </div>
+    </aside>
+
+    <!-- ===== 中央阅读区 ===== -->
+    <main class="reader" id="reader">
+      <div class="progress-bar" id="progressBar"><i></i></div>
+
+      <article class="article" id="article">
+        <div class="article-head" id="articleHead">
+          <div class="ah-meta">
+            <span class="vol-badge" id="volBadge">—</span>
+            <span class="art-date" id="artDate"></span>
+            <span class="art-words" id="artWords"></span>
+          </div>
+          <h1 class="ah-title" id="artTitle">毛泽东选集 · 学习版</h1>
+          <div class="ah-actions">
+            <button class="act" id="btnGuide" title="导读">❖ 导读</button>
+            <button class="act" id="btnRead" title="标记已读">○ 已读</button>
+            <button class="act" id="btnBm" title="加入书签">☆ 书签</button>
+            <button class="act" id="btnNote" title="本篇笔记">✎ 笔记</button>
+            <button class="act" id="btnTTS" title="朗读全文">🔊 朗读</button>
+            <button class="act" id="btnOutline" title="本篇大纲">▤ 大纲</button>
+          </div>
+        </div>
+        <div class="guide-box hidden" id="guideBox"></div>
+        <div class="article-body" id="articleBody"></div>
+      </article>
+
+      <div class="reader-empty" id="readerEmpty">
+        <div class="re-inner">
+          <div class="re-seal">毛</div>
+          <h2>读毛主席的书</h2>
+          <p>从左侧目录选择一篇开始阅读，或用顶部搜索直接定位。<br>
+          支持划词高亮、写笔记、加书签、记录阅读进度——全部自动保存在本机。</p>
+        </div>
+      </div>
+    </main>
+
+    <!-- ===== 右侧大纲 ===== -->
+    <aside class="outline hidden" id="outline">
+      <div class="outline-head">本篇大纲</div>
+      <div class="outline-body" id="outlineBody"></div>
+    </aside>
+  </div>
+
+  <!-- 划词工具条 -->
+  <div class="sel-toolbar hidden" id="selToolbar">
+    <button id="selHighlight">✏ 高亮</button>
+    <button id="selNote">💬 高亮+笔记</button>
+    <button id="selCopy">⧉ 复制</button>
+  </div>
+
+  <!-- 返回顶部 -->
+  <button class="to-top hidden" id="toTop" title="回到顶部">↑</button>
+
+  <!-- 笔记/设置弹窗 -->
+  <div class="modal hidden" id="modal">
+    <div class="modal-card" id="modalCard">
+      <div class="modal-head">
+        <span id="modalTitle">笔记</span>
+        <button class="icon-btn" id="modalClose">✕</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <div class="toast hidden" id="toast"></div>
+
+  <script src="assets/data/articles.js"></script>
+  <script src="assets/data/guides.js"></script>
+  <script src="assets/data/tags.js"></script>
+  <script src="assets/data/timeline.js"></script>
+  <script src="assets/js/daylog-bridge.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
