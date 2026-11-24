@@ -1,5 +1,5 @@
 import {appVersion} from './version.js';
-import { createStaticApi } from './fish-static-api.js?v=20261123e';
+import { createStaticApi } from './fish-static-api.js?v=20261124b';
 
 const byId = id => document.getElementById(id);
 const versionLabel = byId('app-version');
@@ -271,15 +271,25 @@ function message(name, text, mine, created, turnId, sources = [], deep = false, 
   if (turnId !== undefined) {
     const collect = document.createElement('button');
     collect.className = 'collect';
-    collect.textContent = '收藏这段对话';
+    const savedId = 'daylog:entry:fish-chat-' + turnId;
+    const alreadySaved = staticMode && Boolean(localStorage.getItem(savedId));
+    collect.textContent = alreadySaved ? '已在速记' : '收藏到速记';
+    collect.title = alreadySaved ? '这段问答已经存入速记' : '把问题和回答一起存入今天的随手记';
+    collect.disabled = alreadySaved;
     collect.onclick = async () => {
       collect.disabled = true;
       try {
-        await api('/collect',{id:turnId});
-        collect.textContent = staticMode ? '已下载 Markdown' : '已收入资料库';
-        byId('status').textContent = staticMode
-          ? '对话已下载为 Markdown，可在本机保存或导入资料库。'
-          : '这段对话已经可以在资料里查到。';
+        const data = await api('/collect',{id:turnId});
+        if (staticMode) {
+          const created = !data || data.created !== false;
+          collect.textContent = created ? '已存入速记' : '已在速记';
+          byId('status').textContent = created
+            ? '问题和回答已一起存入今天的随手记，可在首页时间线查看。'
+            : '这段对话已经在速记里，没有重复添加。';
+        } else {
+          collect.textContent = '已收入资料库';
+          byId('status').textContent = '这段对话已经可以在资料里查到。';
+        }
       } catch (error) {
         byId('status').textContent = error.message;
         collect.disabled = false;

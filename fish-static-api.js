@@ -818,19 +818,47 @@ async function saveModel(payload) {
   };
 }
 
+function noteText(value) {
+  return String(value || "")
+    .replace(/[&<>"']/g, character => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    }[character]))
+    .replace(/\r?\n/g, "<br>");
+}
+
 function collectTurn(turnId) {
   const turn = readTurns().find(item => Number(item[0]) === Number(turnId));
   if (!turn) throw new Error("未找到该对话。");
-  const text = `${turn[3]}\n\n我：${turn[1]}\n\n大肥鱼：${turn[2]}\n`;
-  const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `大肥鱼对话-${turn[0]}.md`;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-  return true;
+  const id = `fish-chat-${String(turn[0] || Date.now()).replace(/[^\w-]/g, "").slice(0, 50)}`;
+  const key = `daylog:entry:${id}`;
+  const existing = localStorage.getItem(key);
+  if (existing) {
+    let at = "";
+    try {
+      at = JSON.parse(existing)?.at || "";
+    } catch {}
+    return { created: false, id, at };
+  }
+  const chatAt = String(turn[3] || "").slice(0, 16).replace("T", " ");
+  const html = [
+    `<p><strong>我：</strong>${noteText(turn[1])}</p>`,
+    `<blockquote><p><strong>大肥鱼：</strong>${noteText(turn[2])}</p></blockquote>`,
+    `<p>—— 收藏自大肥鱼对话${chatAt ? " · " + noteText(chatAt) : ""}</p>`,
+  ].join("");
+  const at = new Date().toISOString();
+  localStorage.setItem(key, JSON.stringify({
+    id,
+    type: "note",
+    at,
+    html,
+    fav: true,
+    schemaVersion: 2,
+  }));
+  return { created: true, id, at };
 }
 
 export function createStaticApi() {
