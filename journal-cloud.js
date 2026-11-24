@@ -301,7 +301,12 @@ export function getJournalCloudState() {
 }
 
 export async function uploadJournalBackup({ force = false } = {}) {
-  if (uploadPromise) return uploadPromise;
+  if (uploadPromise) {
+    if (!force) return uploadPromise;
+    return uploadPromise
+      .catch(() => null)
+      .then(() => uploadJournalBackup({ force: true }));
+  }
   if (!navigator.onLine) {
     return failure(new Error("当前没有网络，已保存在本机，联网后会自动重试。"));
   }
