@@ -1,5 +1,5 @@
 import {appVersion} from './version.js';
-import { createStaticApi } from './fish-static-api.js?v=20261123d';
+import { createStaticApi } from './fish-static-api.js?v=20261123e';
 
 const byId = id => document.getElementById(id);
 const versionLabel = byId('app-version');
@@ -470,7 +470,8 @@ function renderMemories(items) {
     text.className = 'memory-text';
     text.textContent = item.text;
     const note = document.createElement('small');
-    note.textContent = (item.source === 'auto' ? '自动整理' : '手动添加') + (item.updated ? ' · ' + clock(item.updated) : '');
+    const source = item.source === 'auto' ? '模型整理' : item.source === 'local' ? '本地整理' : '手动添加';
+    note.textContent = source + (item.updated ? ' · ' + clock(item.updated) : '');
     text.append(note);
     const buttons = document.createElement('div');
     buttons.className = 'memory-buttons';
@@ -772,9 +773,20 @@ byId('memory-extract').onclick = async () => {
   try {
     const data = await api('/memory/extract', {});
     memoryResult(data);
-    byId('memory-state').textContent = data.added
-      ? '整理完成，新增 ' + data.added + ' 条长期记忆。' + (byId('memory-enabled').checked ? '' : ' 自动记忆已关闭，暂不会带入对话。')
-      : '整理完成，没有发现新的长期信息。';
+    const scanned = Number(data.scanned) || 0;
+    if (data.model_error) {
+      byId('memory-state').textContent = '模型整理失败，已用本地规则新增 ' + data.added + ' 条。原因：' + data.model_error;
+    } else if (data.added) {
+      byId('memory-state').textContent = '已检查最近 ' + scanned + ' 轮对话，新增 ' + data.added + ' 条长期记忆。'
+        + (byId('memory-enabled').checked ? '' : ' 自动记忆已关闭，暂不会带入对话。');
+    } else if (data.reason === 'no_turns') {
+      byId('memory-state').textContent = '还没有聊天记录，先和大肥鱼聊几句再来整理。';
+    } else if (data.reason === 'no_stable_info') {
+      byId('memory-state').textContent = '已检查最近 ' + scanned + ' 轮对话，但没有找到适合长期保存的信息。'
+        + '行情、新闻和一次性问题不会写入；可以手动添加。';
+    } else {
+      byId('memory-state').textContent = '已检查最近 ' + scanned + ' 轮对话，没有新增；这些信息已经存在。';
+    }
   } catch (error) {
     byId('memory-state').textContent = error.message;
   } finally {

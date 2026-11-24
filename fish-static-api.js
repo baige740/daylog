@@ -7,6 +7,7 @@ const DEFAULT_MODEL_NAME = "deepseek-flash";
 const DEFAULT_ROLE = "你叫大肥鱼，偶尔自称小鲸鱼。你是主人的聊天搭子，不是客服。像在 QQ 或微信上一样用中文短句聊天；先看事实和资料，再下判断，不编造实时行情、新闻或私人记忆。";
 const STICKERS = ["🐟💨", "🐳🌊", "🐡💛", "💙✨"];
 const MAX_TURNS = 320;
+const MEMORY_TURNS = 32;
 const SENSITIVE = /(?:sk-[a-z0-9_-]{12,}|api[_ -]?key|access[_ -]?token|secret|password|密码|口令|身份证|银行卡|信用卡|护照号|cvv|私钥|gh[pousr]_[a-z0-9]{20,}|github_pat_[a-z0-9_]{20,}|eyj[a-z0-9_-]{10,}\.[a-z0-9_-]{10,}\.[a-z0-9_-]{10,}|akia[0-9a-z]{16}|\b\d{17}[\dx]\b|\b(?:\d[ -]?){15,19}\b)/i;
 
 let libraryPromise = null;
@@ -523,35 +524,152 @@ function parseMemoryJson(raw) {
   return result;
 }
 
+function memoryFingerprint(text) {
+  return cleanMemory(text)
+    .replace(/[\s，。！？；：、,.!?;:'\"“”‘’（）()【】[\]…—\-]+/g, "")
+    .toLowerCase();
+}
+
+function mergeMemoryItems(items) {
+  const seen = new Set();
+  const result = [];
+  for (const item of items) {
+    const text = cleanMemory(item?.text);
+    const fingerprint = memoryFingerprint(text);
+    if (text.length < 2 || !fingerprint || seen.has(fingerprint)) continue;
+    seen.add(fingerprint);
+    result.push({ text, kind: memoryKind(item?.kind) });
+    if (result.length >= 5) break;
+  }
+  return result;
+}
+
+function localMemoryCandidates(turns) {
+  const rules = [
+    {
+      kind: "preference",
+      pattern: /我(?:更|很|比较|特别)?喜欢|我(?:很|特别|有点)?不喜欢|我(?:更|比较)?偏好|我(?:讨厌|受不了)/,
+    },
+    {
+      kind: "preference",
+      pattern: /我(?:最近|现在|目前)?(?:通常|一般|习惯|平时|每天|经常|一直|长期)(?:都|会|在)?/,
+    },
+    {
+      kind: "goal",
+      pattern: /我(?:希望|计划|打算|准备|想要)|我的目标/,
+    },
+    {
+      kind: "fact",
+      pattern: /我(?:最近|现在|目前)?(?:在|正在)(?:做|写|开发|整理|研究|学习|准备)|我(?:最近|现在|目前)在忙/,
+    },
+    {
+      kind: "preference",
+      pattern: /我(?:最近|现在|目前)?(?:长期|一直|主要|特别|比较)?关注|我(?:最近|现在|目前)?(?:长期|一直|经常|每天)?(?:看|研究|跟踪)/,
+    },
+    {
+      kind: "fact",
+      pattern: /我叫|我的名字|我住在|我的生日|我的工作|我的家人|我是一名|我是一个/,
+    },
+    {
+      kind: "fact",
+      pattern: /记住|记一下|别忘|以后(?:都|也|就)?|今后|每次/,
+    },
+  ];
+  const result = [];
+  const seen = new Set();
+  for (const turn of (Array.isArray(turns) ? turns : []).slice(-MEMORY_TURNS)) {
+    const question = String(turn?.[1] || "").trim();
+    if (!question) continue;
+    const parts = question.split(/([\n。！？!?；;]+)/);
+    for (let index = 0; index < parts.length; index += 2) {
+      const clause = parts[index].trim();
+      const delimiter = parts[index + 1] || "";
+      if (!clause || !/^我/.test(clause.replace(/^(?:对了|其实|然后|另外|还有|我想说|我跟你说|那个|嗯)[，,、:\s]*/, ""))) continue;
+      if (/[?？]/.test(delimiter)) continue;
+      if (/我(?:是不是|该不该|是否|要不要)|(?:什么|哪些|怎么|为什么|多少|哪家|哪个)$/.test(clause)) continue;
+      const rule = rules.find(item => item.pattern.test(clause));
+      if (!rule) continue;
+      const text = cleanMemory(
+        clause.replace(/^(?:对了|其实|然后|另外|还有|我想说|我跟你说|那个|嗯)[，,、:\s]*/, ""),
+      ).replace(/[。！!；;]+$/, "");
+      if (text.length < 6 || text.length > 160 || SENSITIVE.test(text)) continue;
+      const fingerprint = memoryFingerprint(text);
+      if (!fingerprint || seen.has(fingerprint)) continue;
+      seen.add(fingerprint);
+      result.push({ text, kind: rule.kind });
+      if (result.length >= 5) return result;
+    }
+  }
+  return result;
+}
+
 async function extractMemories() {
   if (extractionPromise) return extractionPromise;
   extractionPromise = (async () => {
     const current = settings();
-    const turns = readTurns().slice(-12);
-    if (!turns.length) return { added: 0, memory_last: current.memoryLast, memories: listMemories() };
-    const transcript = turns.map(item => `- ${String(item[1] || "").slice(0, 500)}`).join("\n");
+    const turns = readTurns().slice(-MEMORY_TURNS);
+    if (!turns.length) {
+      return {
+        added: 0,
+        scanned: 0,
+        reason: "no_turns",
+        memory_last: current.memoryLast,
+        memories: listMemories(),
+      };
+    }
+    const localItems = localMemoryCandidates(turns);
+    const transcript = turns
+      .map(item => `- [${String(item[3] || "").slice(0, 10)}] ${String(item[1] || "").slice(0, 500)}`)
+      .join("\n");
     const messages = [
       {
         role: "system",
         content:
-          "你是长期记忆整理器。只整理用户明确表达、以后仍可能有用的稳定信息。"
-          + "不要记录临时问题、新闻、一次性情绪、助手说的话、推测，以及密码、API Key、身份证、银行卡、护照等敏感凭证。"
-          + "每条用“用户……”开头，8 至 80 字，最多 5 条；没有可记的就返回空数组。"
-          + "kind 只能是 preference、fact、goal、relationship、event。只输出纯 JSON 数组。",
+          "你是长期记忆整理器。只从用户发言中整理以后仍可能有用的稳定信息。"
+          + "值得记录：稳定偏好和习惯、身份与长期处境、长期关注的主题或研究方向、持续进行的项目、明确目标与计划、重要关系与日期、要求以后怎样回答。"
+          + "不要因为话题是股票、经济或投资就跳过：用户明确说自己长期关注市场、每天复盘、正在做某个项目，应记为长期信息。"
+          + "不要记录单次行情、新闻、价格、一次性情绪、给助手的临时指令、助手说的话、推测，以及密码、API Key、身份证、银行卡、护照等敏感凭证。"
+          + "每条用“用户……”开头，8 至 80 字，最多 5 条；没有就返回 []。"
+          + "kind 只能是 preference、fact、goal、relationship、event。只输出纯 JSON 数组，例如："
+          + '[{"text":"用户长期关注A股、经济与每日复盘","kind":"preference"}]',
       },
       { role: "user", content: "以下是按时间从早到晚排列的用户发言：\n" + transcript },
     ];
-    const result = await callModel(current, messages, false, 1200, 60);
+    let modelItems = [];
+    let modelError = "";
+    try {
+      const result = await callModel(current, messages, false, 1200, 60);
+      modelItems = parseMemoryJson(result.answer);
+    } catch (error) {
+      modelError = error instanceof Error ? error.message : "模型整理失败。";
+      if (!localItems.length) throw error;
+    }
+    const useModelItems = modelItems.length > 0;
+    const items = mergeMemoryItems(useModelItems ? modelItems : localItems);
     let added = 0;
-    for (const item of parseMemoryJson(result.answer)) {
-      if (addMemory(item.text, item.kind, "auto").created) added += 1;
+    let localAdded = 0;
+    for (const item of items) {
+      const source = useModelItems ? "auto" : "local";
+      if (addMemory(item.text, item.kind, source).created) {
+        added += 1;
+        if (source === "local") localAdded += 1;
+      }
     }
     const latest = readTurns().reduce((max, item) => Math.max(max, Number(item[0]) || 0), 0);
     const latestSettings = settings();
     latestSettings.memoryLast = beijingStamp();
     latestSettings.memoryCursor = latest;
     saveSettings(latestSettings);
-    return { added, memory_last: latestSettings.memoryLast, memories: listMemories() };
+    return {
+      added,
+      local_added: localAdded,
+      found: items.length,
+      scanned: turns.length,
+      reason: items.length ? "" : "no_stable_info",
+      model_error: modelError,
+      memory_last: latestSettings.memoryLast,
+      memories: listMemories(),
+    };
   })().finally(() => {
     extractionPromise = null;
   });
