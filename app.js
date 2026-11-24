@@ -644,6 +644,15 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('keydown',e=>{if(e.isComposing)return;if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openSearch()}if((e.ctrlKey||e.metaKey)&&e.key==='Enter'&&document.activeElement===editor){e.preventDefault();save()}if(e.key==='Escape')setMenu(false)});
 window.addEventListener('storage',e=>{if(!e.key||e.key.startsWith('daylog:entry:'))renderRecords();else if(e.key.startsWith(articleDraftPrefix))renderArticleDrafts()});
+function syncMobileSidebarCalendar(){
+  const sidebar=$('#sidebar'),nav=sidebar.querySelector(':scope > nav'),foot=$('#side-foot'),calendar=$('#calendar');
+  const mobile=matchMedia('(max-width: 820px)').matches;
+  if(mobile&&calendar.parentElement!==nav)nav.append(calendar);
+  else if(!mobile&&calendar.parentElement!==foot)foot.prepend(calendar);
+}
+const mobileSidebarMedia=matchMedia('(max-width: 820px)');
+mobileSidebarMedia.addEventListener?.('change',syncMobileSidebarCalendar);
+syncMobileSidebarCalendar();
 function changeDay(){if(activeDate!==dateKey(new Date())){headerDate();renderRecords()}}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){changeDay();if(view==='home')marketRefresh?.()}});setInterval(changeDay,30000);
 window.addEventListener('pageshow',()=>{if(view==='home')marketRefresh?.()});

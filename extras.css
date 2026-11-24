@@ -1113,8 +1113,35 @@ body.article-page .inline-mood-group {
   }
 
   body.nav-open #sidebar {
-    padding-bottom: calc(18px + env(safe-area-inset-bottom));
-    scroll-padding-bottom: calc(18px + env(safe-area-inset-bottom));
+    display: flex;
+    overflow: hidden;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+
+  body.nav-open #sidebar > nav {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: 12px;
+  }
+
+  body.nav-open #side-foot {
+    flex: none;
+    margin-top: 0;
+    padding-top: 8px;
+    background: #fcfdfb;
+    box-shadow: 0 -12px 22px #fcfdfb;
+  }
+
+  body.nav-open #calendar {
+    margin-top: 14px;
+    padding-bottom: 16px;
+  }
+
+  body.nav-open #profile {
+    padding-top: 13px;
+    padding-bottom: max(13px, env(safe-area-inset-bottom));
   }
 
   #mobile-nav button {
