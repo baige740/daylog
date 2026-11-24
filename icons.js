@@ -37,7 +37,9 @@ trendUp:'<path d="m5 16 12-9M9 7h8v8"/>',trendDown:'<path d="m5 8 12 9M9 17h8V9"
 pin:'<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0z"/><circle cx="12" cy="10" r="2.4"/>',
 image:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m5 18 5-5 3 3 2-2 4 4"/>',
 camera:'<path d="M4 8h3l1.5-2h7L17 8h3q2 0 2 2v8q0 2-2 2H4q-2 0-2-2v-8q0-2 2-2z"/><circle cx="12" cy="14" r="3.5"/>',
-weather:'<circle cx="8" cy="8" r="3"/><path d="M8 2v2m0 8v2M2 8h2m8 0h2M3.8 3.8l1.4 1.4m5.6 5.6 1.4 1.4m0-8.4-1.4 1.4m-5.6 5.6-1.4 1.4"/><path d="M10 19h8a3 3 0 0 0 .3-6A5 5 0 0 0 9 15a2 2 0 0 0 1 4z"/>'
+weather:'<circle cx="8" cy="8" r="3"/><path d="M8 2v2m0 8v2M2 8h2m8 0h2M3.8 3.8l1.4 1.4m5.6 5.6 1.4 1.4m0-8.4-1.4 1.4m-5.6 5.6-1.4 1.4"/><path d="M10 19h8a3 3 0 0 0 .3-6A5 5 0 0 0 9 15a2 2 0 0 0 1 4z"/>',
+wallet:'<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H19a2 2 0 0 1 2 2v13H6a2 2 0 0 1-2-2zM4 7h14M16 11h5v5h-5a2.5 2.5 0 0 1 0-5z"/><circle cx="17" cy="13.5" r=".7" fill="currentColor" stroke="none"/>',
+scale:'<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M7 9a5 5 0 0 0 10 0"/><path d="m12 9 2-2"/>'
 };
 export function icon(k){return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">'+(paths[k]||'')+'</svg>'}
 export function paintIcons(root=document){root.querySelectorAll('[data-i]').forEach(el=>el.innerHTML=icon(el.dataset.i))}

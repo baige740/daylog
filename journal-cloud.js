@@ -1,5 +1,6 @@
 import { entries, storedDraftEntries } from "./journal.js";
 import { exportMediaBundle } from "./media.js";
+import { getLifeBackupData, lifeCounts } from "./life-data.js";
 
 const SETTINGS_KEY = "daylog:cloud:v1";
 const CLOUD_VERSION = 1;
@@ -47,6 +48,9 @@ function writeSettings(value) {
     recordCount: Number(value.recordCount) || 0,
     draftCount: Number(value.draftCount) || 0,
     mediaCount: Number(value.mediaCount) || 0,
+    lifeCount: Number(value.lifeCount) || 0,
+    weightCount: Number(value.weightCount) || 0,
+    ledgerCount: Number(value.ledgerCount) || 0,
   };
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(config));
   return config;
@@ -250,6 +254,8 @@ async function request(path, options = {}) {
 export async function buildJournalBackup() {
   const records = entries();
   const drafts = storedDraftEntries();
+  const life = getLifeBackupData();
+  const lifeSummary = lifeCounts(life);
   const { media, missingIds } = await exportMediaBundle(
     records,
     drafts.map(item => item.value),
@@ -257,18 +263,20 @@ export async function buildJournalBackup() {
   return {
     payload: {
       app: "daylog",
-      version: 3,
+      version: 4,
       exportedAt: new Date().toISOString(),
       entries: records,
       drafts,
       media,
       missingMedia: missingIds,
+      life,
     },
     counts: {
       records: records.length,
       drafts: drafts.length,
       media: media.length,
       missingMedia: missingIds.length,
+      ...lifeSummary,
     },
   };
 }
@@ -284,6 +292,9 @@ export function getJournalCloudState() {
     recordCount: config.recordCount,
     draftCount: config.draftCount,
     mediaCount: config.mediaCount,
+    lifeCount: config.lifeCount,
+    weightCount: config.weightCount,
+    ledgerCount: config.ledgerCount,
   };
 }
 
@@ -296,8 +307,8 @@ export async function uploadJournalBackup({ force = false } = {}) {
     const config = settings();
     emit({ phase: "uploading", message: "正在加密并上传手记…", config });
     const { payload, counts } = await buildJournalBackup();
-    if (!counts.records && !counts.drafts && !counts.media) {
-      const message = "还没有可上传的手记或图片。";
+    if (!counts.records && !counts.drafts && !counts.media && !counts.lifeCount) {
+      const message = "还没有可上传的手记、体重或账目。";
       const updated = saveSettings({ lastMessage: message, lastError: "" });
       emit({ phase: "empty", message, config: updated, counts });
       return { skipped: true, message, counts };
@@ -340,6 +351,9 @@ export async function uploadJournalBackup({ force = false } = {}) {
       recordCount: counts.records,
       draftCount: counts.drafts,
       mediaCount: counts.media,
+      lifeCount: counts.lifeCount,
+      weightCount: counts.weightCount,
+      ledgerCount: counts.ledgerCount,
     });
     emit({
       phase: "success",
@@ -412,6 +426,9 @@ function localFingerprint() {
       key?.startsWith("daylog:entry:")
       || key?.startsWith("daylog:draft:")
       || key?.startsWith("daylog:article-draft:")
+      || key === "daylog:life:profile:v1"
+      || key === "daylog:life:weights:v1"
+      || key === "daylog:life:ledger:v1"
     ) {
       keys.push(key);
     }
