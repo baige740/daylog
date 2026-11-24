@@ -1,15 +1,18 @@
 export const LIFE_PROFILE_KEY = "daylog:life:profile:v1";
 export const LIFE_WEIGHTS_KEY = "daylog:life:weights:v1";
 export const LIFE_LEDGER_KEY = "daylog:life:ledger:v1";
+export const LIFE_QUICK_LEDGER_KEY = "daylog:life:quick-ledger:v1";
 
 export const LIFE_STORAGE_KEYS = [
   LIFE_PROFILE_KEY,
   LIFE_WEIGHTS_KEY,
   LIFE_LEDGER_KEY,
+  LIFE_QUICK_LEDGER_KEY,
 ];
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 const LEDGER_TYPES = new Set(["income", "expense"]);
+const MAX_QUICK_LEDGER = 20;
 
 function identifier(prefix) {
   const random = globalThis.crypto?.randomUUID?.()
@@ -103,9 +106,43 @@ function normalizeLedger(value) {
     payee: cleanText(value.payee, 80),
     note: cleanText(value.note, 500),
     tags: normalizeTags(value.tags),
+    quickLedgerId: ID_PATTERN.test(String(value.quickLedgerId || ""))
+      ? String(value.quickLedgerId)
+      : "",
     at,
     createdAt: canonicalDate(value.createdAt) || at,
     updatedAt: canonicalDate(value.updatedAt) || canonicalDate(value.createdAt) || at,
+  };
+}
+
+function normalizeQuickLedger(value) {
+  if (!value || typeof value !== "object" || !ID_PATTERN.test(String(value.id || ""))) {
+    throw new Error("快捷账目 ID 无效");
+  }
+  const amount = Math.round(Number(value.amount) * 100) / 100;
+  const name = cleanText(value.name, 24);
+  if (
+    !name
+    || !Number.isFinite(amount)
+    || amount <= 0
+    || amount > 1_000_000_000_000
+    || !LEDGER_TYPES.has(value.type)
+  ) {
+    throw new Error("快捷账目格式无效");
+  }
+  return {
+    id: String(value.id),
+    name,
+    type: value.type,
+    amount,
+    currency: "CNY",
+    category: cleanText(value.category, 30) || "其他",
+    account: cleanText(value.account, 30) || "其他",
+    payee: cleanText(value.payee, 80),
+    note: cleanText(value.note, 500),
+    tags: normalizeTags(value.tags),
+    createdAt: canonicalDate(value.createdAt) || new Date().toISOString(),
+    updatedAt: canonicalDate(value.updatedAt) || canonicalDate(value.createdAt) || new Date().toISOString(),
   };
 }
 
@@ -191,6 +228,7 @@ export function saveLedger(input) {
     payee: input?.payee,
     note: input?.note,
     tags: input?.tags,
+    quickLedgerId: input?.quickLedgerId || existing?.quickLedgerId,
     at: input?.at,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
@@ -207,6 +245,52 @@ export function deleteLedger(id) {
   writeArray(LIFE_LEDGER_KEY, next);
 }
 
+export function listQuickLedger() {
+  return readArray(LIFE_QUICK_LEDGER_KEY)
+    .map(value => {
+      try {
+        return normalizeQuickLedger(value);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
+}
+
+export function saveQuickLedger(input) {
+  const now = new Date().toISOString();
+  const items = listQuickLedger();
+  const existing = input?.id ? items.find(item => item.id === input.id) : null;
+  if (!existing && items.length >= MAX_QUICK_LEDGER) {
+    throw new Error(`最多设置 ${MAX_QUICK_LEDGER} 个快捷账目`);
+  }
+  const record = normalizeQuickLedger({
+    id: existing?.id || identifier("quick"),
+    name: input?.name,
+    type: input?.type,
+    amount: input?.amount,
+    currency: "CNY",
+    category: input?.category,
+    account: input?.account,
+    payee: input?.payee,
+    note: input?.note,
+    tags: input?.tags,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  });
+  const next = items.filter(item => item.id !== record.id);
+  next.push(record);
+  next.sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
+  writeArray(LIFE_QUICK_LEDGER_KEY, next);
+  return record;
+}
+
+export function deleteQuickLedger(id) {
+  const next = listQuickLedger().filter(item => item.id !== id);
+  writeArray(LIFE_QUICK_LEDGER_KEY, next);
+}
+
 export function normaliseLifeBackup(value) {
   if (!value || typeof value !== "object") throw new Error("备份中没有生活数据");
   if (!Array.isArray(value.weights) || !Array.isArray(value.ledger)) {
@@ -217,6 +301,9 @@ export function normaliseLifeBackup(value) {
     profile: normalizeProfile(value.profile),
     weights: value.weights.map(normalizeWeight),
     ledger: value.ledger.map(normalizeLedger),
+    quickLedger: Array.isArray(value.quickLedger)
+      ? value.quickLedger.map(normalizeQuickLedger)
+      : [],
   };
 }
 
@@ -226,14 +313,16 @@ export function getLifeBackupData() {
     profile: getLifeProfile(),
     weights: listWeights(),
     ledger: listLedger(),
+    quickLedger: listQuickLedger(),
   });
 }
 
 export function lifeCounts(data = getLifeBackupData()) {
   return {
-    lifeCount: data.profile || data.weights.length || data.ledger.length ? 1 : 0,
+    lifeCount: data.profile || data.weights.length || data.ledger.length || data.quickLedger.length ? 1 : 0,
     weightCount: data.weights.length,
     ledgerCount: data.ledger.length,
+    quickLedgerCount: data.quickLedger.length,
   };
 }
 
@@ -278,6 +367,15 @@ export function mergeLifeBackup(value) {
     writeArray(LIFE_LEDGER_KEY, merged);
   }
 
+  const currentQuickLedger = listQuickLedger();
+  const knownQuickLedger = new Set(currentQuickLedger.map(item => item.id));
+  const addedQuickLedger = incoming.quickLedger.filter(item => !knownQuickLedger.has(item.id));
+  if (addedQuickLedger.length) {
+    const merged = currentQuickLedger.concat(addedQuickLedger)
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
+    writeArray(LIFE_QUICK_LEDGER_KEY, merged);
+  }
+
   return {
     profileAdded: Boolean(
       incomingProfile
@@ -285,5 +383,6 @@ export function mergeLifeBackup(value) {
     ),
     weightsAdded: addedWeights.length,
     ledgerAdded: addedLedger.length,
+    quickLedgerAdded: addedQuickLedger.length,
   };
 }

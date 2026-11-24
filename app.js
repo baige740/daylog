@@ -8,7 +8,7 @@ import {DEFAULT_STYLE,applyDocumentStyle,contextBadgeMarkup,firstImageFiles,mood
 import {addImagesToEditor,cleanupUnreferencedMedia,deleteMediaAssets,hydrateMedia,importMediaAssets,referencedMediaIds,saveImageAsset} from './media.js';
 import {renderStatsPage} from './insights.js';
 import {getLifeBackupData,lifeCounts,mergeLifeBackup,normaliseLifeBackup,restoreLifeStorage,snapshotLifeStorage} from './life-data.js';
-import {renderLedgerPage,renderWellnessPage,stopWellnessTicker} from './life-ui.js';
+import {renderHomeLedgerQuick,renderLedgerPage,renderWellnessPage,stopWellnessTicker} from './life-ui.js';
 import {buildJournalBackup,getJournalCloudState,replaceJournalSyncCode,restoreJournalBackup,startJournalCloud,uploadJournalBackup} from './journal-cloud.js';
 const $=s=>document.querySelector(s);
 const editor=$('#editor'),dialog=$('#dialog'),dialogBody=$('#dialog-content');
@@ -226,6 +226,7 @@ function renderRecords(){
   const lastMood=today.find(r=>r.type==='mood');document.querySelectorAll('.mood').forEach(b=>b.classList.toggle('active',Boolean(lastMood)&&plain(lastMood.html)===feelings[Number(b.dataset.mood)]));
   updateQuickCounts(today);
   decorateEntries($('#today-list'));
+  renderHomeLedgerQuick($('#home-ledger-quick'),{notify:toast,navigate});
   renderArticleDrafts();renderCal();
   if(view==='stats')renderStats();else if(view!=='home'&&$('#archive-list'))renderArchiveList()
 }
@@ -532,7 +533,7 @@ async function importBackupData(data,statusElement){
       lifeImport=mergeLifeBackup(incomingLife);
     }
     const lifeText=lifeImport
-      ? '，并合并 '+(lifeImport.profileAdded?1:0)+' 份生日资料、'+lifeImport.weightsAdded+' 条体重、'+lifeImport.ledgerAdded+' 笔账目'
+      ? '，并合并 '+(lifeImport.profileAdded?1:0)+' 份生日资料、'+lifeImport.weightsAdded+' 条体重、'+lifeImport.ledgerAdded+' 笔账目、'+lifeImport.quickLedgerAdded+' 个快捷账目'
       : '';
     statusElement.textContent='恢复 '+addedIds.length+' 条记录、'+addedDraftKeys.length+' 份草稿'+lifeText+'，跳过 '
       +(incoming.length-addedIds.length)+' 条重复记录'+(missingMediaCount?'；另有 '+missingMediaCount+' 张图片在原备份中已标记缺失。':'。');
@@ -569,7 +570,7 @@ async function copyText(value){
 }
 function openBackup(){
   const localLife=lifeCounts(getLifeBackupData());
-  openDialog('我的手记本','<section class="cloud-backup" aria-labelledby="cloud-title"><div class="cloud-backup-head"><span class="cloud-mark">'+icon('shield')+'</span><div><b id="cloud-title">GitHub 加密备份</b><p>手记、图片、体重和账目先在设备内加密，云端与 GitHub 只保存无法阅读的密文。</p></div><span class="cloud-phase" id="cloud-phase">准备中</span></div><div class="cloud-summary" id="cloud-summary"></div><div class="cloud-code-box"><label for="cloud-code">换手机恢复码</label><code id="cloud-code"></code></div><div class="backup-row cloud-actions"><button class="primary" id="cloud-now">'+icon('upload')+'立即备份</button><button class="secondary" id="copy-code">复制恢复码</button><button class="secondary" id="download-code">'+icon('download')+'保存恢复码</button></div><details class="cloud-restore"><summary>换手机或从云端恢复</summary><p>粘贴之前保存的恢复码。备份会与这台设备已有记录合并，重复内容自动跳过。</p><label class="field-label" for="restore-code">云端恢复码</label><textarea class="field" id="restore-code" rows="3" autocomplete="off" spellcheck="false" placeholder="DAYLOG1.…"></textarea><button class="primary" id="restore-cloud">'+icon('download')+'从云端恢复</button></details><div id="backup-status" class="backup-status" role="status"></div></section><section class="local-backup"><div class="backup-section-head"><b>本机 JSON 备份</b><span>'+records.length+' 条记录 · '+localLife.weightCount+' 次体重 · '+localLife.ledgerCount+' 笔账目</span></div><p>需要自己保存备份文件时，可导出全部草稿、照片、自定义背景、体重与账目。导入时已有内容会自动跳过。</p><div class="backup-row"><button class="secondary" id="export">'+icon('download')+'导出文件</button><button class="secondary" id="import">'+icon('upload')+'导入文件</button><input type="file" id="backup-file" hidden accept=".json,application/json"></div></section><section class="local-backup"><div class="backup-section-head"><b>访问安全</b><span>当前版本 '+appVersion+'</span></div><p>访问密码只在本机校验，不会随备份上传。手机上可从浏览器菜单添加到主屏幕。</p><div class="backup-row"><button class="secondary" id="change-password">修改访问密码</button><button class="secondary" id="lock-now">立即锁定</button></div></section>');
+  openDialog('我的手记本','<section class="cloud-backup" aria-labelledby="cloud-title"><div class="cloud-backup-head"><span class="cloud-mark">'+icon('shield')+'</span><div><b id="cloud-title">GitHub 加密备份</b><p>手记、图片、体重、账目和快捷记账先在设备内加密，云端与 GitHub 只保存无法阅读的密文。</p></div><span class="cloud-phase" id="cloud-phase">准备中</span></div><div class="cloud-summary" id="cloud-summary"></div><div class="cloud-code-box"><label for="cloud-code">换手机恢复码</label><code id="cloud-code"></code></div><div class="backup-row cloud-actions"><button class="primary" id="cloud-now">'+icon('upload')+'立即备份</button><button class="secondary" id="copy-code">复制恢复码</button><button class="secondary" id="download-code">'+icon('download')+'保存恢复码</button></div><details class="cloud-restore"><summary>换手机或从云端恢复</summary><p>粘贴之前保存的恢复码。备份会与这台设备已有记录合并，重复内容自动跳过。</p><label class="field-label" for="restore-code">云端恢复码</label><textarea class="field" id="restore-code" rows="3" autocomplete="off" spellcheck="false" placeholder="DAYLOG1.…"></textarea><button class="primary" id="restore-cloud">'+icon('download')+'从云端恢复</button></details><div id="backup-status" class="backup-status" role="status"></div></section><section class="local-backup"><div class="backup-section-head"><b>本机 JSON 备份</b><span>'+records.length+' 条记录 · '+localLife.weightCount+' 次体重 · '+localLife.ledgerCount+' 笔账目 · '+localLife.quickLedgerCount+' 个快捷</span></div><p>需要自己保存备份文件时，可导出全部草稿、照片、自定义背景、体重、账目与快捷模板。导入时已有内容会自动跳过。</p><div class="backup-row"><button class="secondary" id="export">'+icon('download')+'导出文件</button><button class="secondary" id="import">'+icon('upload')+'导入文件</button><input type="file" id="backup-file" hidden accept=".json,application/json"></div></section><section class="local-backup"><div class="backup-section-head"><b>访问安全</b><span>当前版本 '+appVersion+'</span></div><p>访问密码只在本机校验，不会随备份上传。手机上可从浏览器菜单添加到主屏幕。</p><div class="backup-row"><button class="secondary" id="change-password">修改访问密码</button><button class="secondary" id="lock-now">立即锁定</button></div></section>');
   const backupStatus=$('#backup-status');
   const cloudPhase=$('#cloud-phase'),cloudSummary=$('#cloud-summary'),cloudCode=$('#cloud-code');
   const stateLabels={uploading:'正在加密上传',success:'已加密备份',current:'云端已是最新',error:'上传失败',empty:'等待首次记录',restored:'恢复完成',code:'恢复码已切换'};
@@ -584,7 +585,8 @@ function openBackup(){
     const mediaText=(Number(state.mediaCount)||0)+' 张图片';
     const lifeText=(Number(state.weightCount)||0)+' 次体重';
     const ledgerText=(Number(state.ledgerCount)||0)+' 笔账目';
-    cloudSummary.textContent=(state.lastSuccess?'最近备份 '+cloudTime(state.lastSuccess)+' · ':'')+recordsText+' · '+draftsText+' · '+mediaText+' · '+lifeText+' · '+ledgerText;
+    const quickLedgerText=(Number(state.quickLedgerCount)||0)+' 个快捷';
+    cloudSummary.textContent=(state.lastSuccess?'最近备份 '+cloudTime(state.lastSuccess)+' · ':'')+recordsText+' · '+draftsText+' · '+mediaText+' · '+lifeText+' · '+ledgerText+' · '+quickLedgerText;
     cloudSummary.title=detail?.message||state.lastMessage||state.lastError||'';
     cloudCode.textContent=state.recoveryCode;
   };
@@ -594,7 +596,7 @@ function openBackup(){
   renderCloud();
   $('#cloud-now').onclick=async()=>{
     const button=$('#cloud-now');
-    button.disabled=true;backupStatus.textContent='正在整理手记、图片、体重和账目，并在设备内加密…';
+    button.disabled=true;backupStatus.textContent='正在整理手记、图片、体重、账目和快捷记账，并在设备内加密…';
     try{
       const result=await uploadJournalBackup({force:true});
       backupStatus.textContent=result.skipped
@@ -635,14 +637,14 @@ function openBackup(){
     }finally{button.disabled=false}
   };
   $('#export').onclick=()=>safeAction(async()=>{
-    backupStatus.textContent='正在整理手记、图片、体重和账目…';
+    backupStatus.textContent='正在整理手记、图片、体重、账目和快捷记账…';
     try{
       const {payload,counts}=await buildJournalBackup();
       const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
       const url=URL.createObjectURL(blob),a=document.createElement('a');
       a.href=url;a.download='日迹-'+dateKey(new Date())+'.json';a.click();
       setTimeout(()=>URL.revokeObjectURL(url),1000);
-      backupStatus.textContent='已导出 '+counts.records+' 条记录、'+counts.drafts+' 份草稿、'+counts.media+' 张图片、'+counts.weightCount+' 次体重和 '+counts.ledgerCount+' 笔账目。'
+      backupStatus.textContent='已导出 '+counts.records+' 条记录、'+counts.drafts+' 份草稿、'+counts.media+' 张图片、'+counts.weightCount+' 次体重、'+counts.ledgerCount+' 笔账目和 '+counts.quickLedgerCount+' 个快捷账目。'
         +(counts.missingMedia?' 另有 '+counts.missingMedia+' 张旧图片在当前浏览器中已缺失，备份会如实标记。':'');
     }catch(error){
       backupStatus.textContent='导出失败，请检查本机存储空间后重试。';
@@ -677,7 +679,7 @@ document.addEventListener('click',e=>{
   }
 });
 document.addEventListener('keydown',e=>{if(e.isComposing)return;if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openSearch()}if((e.ctrlKey||e.metaKey)&&e.key==='Enter'&&document.activeElement===editor){e.preventDefault();save()}if(e.key==='Escape')setMenu(false)});
-window.addEventListener('storage',e=>{if(!e.key||e.key.startsWith('daylog:entry:'))renderRecords();else if(e.key.startsWith(articleDraftPrefix))renderArticleDrafts()});
+window.addEventListener('storage',e=>{if(!e.key||e.key.startsWith('daylog:entry:'))renderRecords();else if(e.key.startsWith(articleDraftPrefix))renderArticleDrafts();else if(e.key?.startsWith('daylog:life:'))renderHomeLedgerQuick($('#home-ledger-quick'),{notify:toast,navigate})});
 function syncMobileSidebarCalendar(){
   const sidebar=$('#sidebar'),nav=sidebar.querySelector(':scope > nav'),foot=$('#side-foot'),calendar=$('#calendar');
   const mobile=matchMedia('(max-width: 820px)').matches;

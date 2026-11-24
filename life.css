@@ -1161,6 +1161,429 @@
   text-align: center;
 }
 
+/* Quick ledger: configuration in the ledger and one-tap use on the dashboard */
+.ledger-quick-panel {
+  margin-bottom: 13px;
+  overflow: hidden;
+}
+
+.ledger-quick-head {
+  padding-bottom: 10px;
+}
+
+.ledger-quick-head h2 span {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: #edf4ee;
+  color: #75877c;
+  font: 600 9.5px/1.4 Inter, "Segoe UI", sans-serif;
+  vertical-align: middle;
+}
+
+.ledger-quick-grid,
+.home-ledger-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(235px, 1fr));
+  gap: 9px;
+}
+
+.ledger-quick-grid {
+  padding: 0 16px 16px;
+}
+
+.ledger-quick-item {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #dce7de;
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, #fbfdfa, #f2f7f2);
+  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+
+.ledger-quick-item:hover {
+  border-color: #bcd2c1;
+  box-shadow: 0 7px 18px #264b3512;
+  transform: translateY(-1px);
+}
+
+.ledger-quick-run {
+  display: grid;
+  grid-template-columns: 35px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 12px;
+  color: #29473a;
+  text-align: left;
+}
+
+.ledger-quick-item:not(.is-home) .ledger-quick-run {
+  padding-right: 64px;
+}
+
+.ledger-quick-run:disabled {
+  cursor: wait;
+  opacity: .62;
+}
+
+.ledger-quick-icon {
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  border-radius: 10px;
+  background: #f8e9e4;
+  color: #aa604d;
+}
+
+.ledger-quick-icon.is-income {
+  background: #e3f1e8;
+  color: #2f7959;
+}
+
+.ledger-quick-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.ledger-quick-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ledger-quick-copy b {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ledger-quick-copy small {
+  overflow: hidden;
+  color: #849187;
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ledger-quick-run > strong {
+  color: #a95e4a;
+  font: 680 13px/1.2 Inter, "Segoe UI", sans-serif;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-quick-run > strong.is-income {
+  color: #2f7959;
+}
+
+.ledger-quick-run > em {
+  grid-column: 2 / -1;
+  color: #98a29b;
+  font-size: 8.5px;
+  font-style: normal;
+  line-height: 1;
+}
+
+.ledger-quick-actions {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  display: flex;
+  gap: 2px;
+  padding-left: 6px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, transparent, #f8fbf7 16%);
+}
+
+.ledger-quick-actions button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 27px;
+  border-radius: 7px;
+  color: #7b8d81;
+}
+
+.ledger-quick-actions button:hover {
+  background: #e7f0e8;
+  color: #315f49;
+}
+
+.ledger-quick-actions button:last-child:hover {
+  background: #f8e9e5;
+  color: #a25744;
+}
+
+.ledger-quick-actions svg {
+  width: 13px;
+  height: 13px;
+}
+
+.ledger-quick-empty {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 0 16px 16px;
+  padding: 15px;
+  border: 1px dashed #ceddd1;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f8fbf7, #f2f7f2);
+}
+
+.ledger-quick-empty > span {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: #e6f0e7;
+  color: #47755e;
+}
+
+.ledger-quick-empty > span svg {
+  width: 19px;
+  height: 19px;
+}
+
+.ledger-quick-empty b {
+  color: #365746;
+  font-size: 12.5px;
+}
+
+.ledger-quick-empty p {
+  margin: 4px 0 0;
+  color: #829087;
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+
+.ledger-quick-empty > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid #cadcce;
+  border-radius: 8px;
+  background: #fff;
+  color: #37634f;
+  font-size: 10.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.ledger-quick-empty > button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.quick-ledger-form {
+  margin-top: 1px;
+  padding: 15px 16px 16px;
+  border-top: 1px solid #e4ebe5;
+  background: #f7faf7;
+}
+
+.quick-ledger-form[hidden] {
+  display: none;
+}
+
+.quick-ledger-form > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.quick-ledger-form header p {
+  margin: 0 0 3px;
+  color: #8a988f;
+  font: 650 8.5px/1.4 Inter, "Segoe UI", sans-serif;
+  letter-spacing: .14em;
+}
+
+.quick-ledger-form header h3 {
+  margin: 0;
+  color: #2b4d3d;
+  font: 650 16px/1.4 "LXGW WenKai Lite", "Songti SC", serif;
+}
+
+.quick-ledger-form > header > button {
+  color: #78887e;
+  font-size: 10.5px;
+}
+
+.quick-ledger-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.quick-ledger-form-grid .life-field {
+  margin: 0;
+}
+
+.quick-ledger-form-grid .life-field.is-wide {
+  grid-column: 1 / -1;
+}
+
+.quick-ledger-type {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  height: 37px;
+  padding: 3px;
+  border-radius: 8px;
+  background: #e9efea;
+}
+
+.quick-ledger-type button {
+  border-radius: 6px;
+  color: #75847b;
+  font-size: 11px;
+}
+
+.quick-ledger-type button[aria-pressed="true"] {
+  background: #fff;
+  color: #315f49;
+  box-shadow: 0 1px 5px #1839261a;
+  font-weight: 650;
+}
+
+.quick-ledger-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 13px;
+}
+
+.quick-ledger-form-actions .primary,
+.quick-ledger-form-actions .secondary {
+  min-height: 36px;
+  font-size: 11px;
+}
+
+.home-ledger-quick {
+  margin: 2px 17px 17px;
+  padding-top: 13px;
+  border-top: 1px solid #e7ece7;
+}
+
+.home-ledger-quick-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.home-ledger-quick-head > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.home-ledger-quick-head > div > span {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 8px;
+  background: #e5efe7;
+  color: #3b7459;
+}
+
+.home-ledger-quick-head svg {
+  width: 14px;
+  height: 14px;
+}
+
+.home-ledger-quick-head b {
+  color: #365345;
+  font-size: 12.5px;
+}
+
+.home-ledger-quick-head > button {
+  color: #5f7f6d;
+  font-size: 10px;
+}
+
+.home-ledger-quick-grid {
+  grid-template-columns: 1fr;
+  gap: 7px;
+}
+
+.ledger-quick-item.is-home {
+  background: #f7faf6;
+}
+
+.ledger-quick-item.is-home .ledger-quick-run {
+  min-height: 62px;
+  padding: 8px 10px;
+}
+
+.ledger-quick-item.is-home .ledger-quick-icon {
+  width: 31px;
+  height: 31px;
+}
+
+.ledger-quick-item.is-home .ledger-quick-run > em {
+  display: none;
+}
+
+.home-ledger-quick-foot {
+  margin: 7px 0 0;
+  color: #97a099;
+  font-size: 8.5px;
+  text-align: center;
+}
+
+.home-ledger-quick-empty {
+  display: grid;
+  gap: 8px;
+  padding: 11px;
+  border: 1px dashed #d6e0d7;
+  border-radius: 9px;
+  background: #f9fbf8;
+  text-align: center;
+}
+
+.home-ledger-quick-empty p {
+  margin: 0;
+  color: #76857c;
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+
+.home-ledger-quick-empty button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 30px;
+  border: 1px solid #cfdfd3;
+  border-radius: 7px;
+  background: #fff;
+  color: #3a654f;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.home-ledger-quick-empty button svg {
+  width: 12px;
+  height: 12px;
+}
+
 @keyframes life-live-pulse {
   0% {
     box-shadow: 0 0 0 0 #9dd6a755;

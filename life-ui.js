@@ -1,12 +1,15 @@
 import { icon } from "./icons.js";
 import {
   deleteLedger,
+  deleteQuickLedger,
   deleteWeight,
   getLifeProfile,
   listLedger,
+  listQuickLedger,
   listWeights,
   saveLedger,
   saveLifeProfile,
+  saveQuickLedger,
   saveWeight,
 } from "./life-data.js";
 
@@ -435,6 +438,218 @@ function ledgerRecordMatches(record, query, type) {
   return haystack.includes(query.toLocaleLowerCase());
 }
 
+function quickLedgerCountToday(id) {
+  const now = new Date();
+  return listLedger().filter(item => {
+    if (item.quickLedgerId !== id) return false;
+    const at = new Date(item.at);
+    return at.getFullYear() === now.getFullYear()
+      && at.getMonth() === now.getMonth()
+      && at.getDate() === now.getDate();
+  }).length;
+}
+
+function quickLedgerCardsMarkup(items, { home = false } = {}) {
+  return items.map(item => {
+    const today = quickLedgerCountToday(item.id);
+    const detail = [item.category, item.account].filter(Boolean).join(" · ");
+    const amount = `${item.type === "income" ? "+" : "−"}${money(item.amount)}`;
+    return `<article class="ledger-quick-item${home ? " is-home" : ""}" data-quick-template-id="${item.id}">
+      <button type="button" class="ledger-quick-run" data-run-quick-ledger="${item.id}" aria-label="快捷记账：${escapeHTML(item.name)}，${amount}">
+        <span class="ledger-quick-icon is-${item.type}">${icon(item.type === "income" ? "trendUp" : "wallet")}</span>
+        <span class="ledger-quick-copy"><b>${escapeHTML(item.name)}</b><small>${escapeHTML(detail)}</small></span>
+        <strong class="is-${item.type}">${amount}</strong>
+        <em>${today ? `今日 ${today} 次` : "点一下就记"}</em>
+      </button>
+      ${home ? "" : `<div class="ledger-quick-actions">
+        <button type="button" data-edit-quick-ledger="${item.id}" title="编辑快捷记账" aria-label="编辑 ${escapeHTML(item.name)}">${icon("pen")}</button>
+        <button type="button" data-delete-quick-ledger="${item.id}" title="删除快捷记账" aria-label="删除 ${escapeHTML(item.name)}">${icon("trash")}</button>
+      </div>`}
+    </article>`;
+  }).join("");
+}
+
+function runQuickLedger(template) {
+  return saveLedger({
+    quickLedgerId: template.id,
+    type: template.type,
+    amount: template.amount,
+    category: template.category,
+    account: template.account,
+    payee: template.payee || template.name,
+    note: template.note,
+    tags: template.tags,
+    at: new Date().toISOString(),
+  });
+}
+
+export function renderHomeLedgerQuick(root, options = {}) {
+  if (!root) return;
+  const items = listQuickLedger();
+  root.innerHTML = `<div class="home-ledger-quick-head">
+    <div><span>${icon("wallet")}</span><b>快捷记账</b></div>
+    <button type="button" data-home-ledger-manage="${items.length ? "add" : "empty"}">${items.length ? "管理" : "去设置"}</button>
+  </div>
+  ${items.length
+    ? `<div class="home-ledger-quick-grid">${quickLedgerCardsMarkup(items, { home: true })}</div>
+      <p class="home-ledger-quick-foot">点一下会按当前时间自动入账</p>`
+    : `<div class="home-ledger-quick-empty">
+        <p>把上班地铁、下班地铁设成一键账目</p>
+        <button type="button" data-home-ledger-manage="empty">${icon("plus")}设置快捷记账</button>
+      </div>`}`;
+
+  root.querySelectorAll("[data-home-ledger-manage]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (typeof options.navigate === "function") options.navigate("ledger");
+    });
+  });
+  root.querySelectorAll("[data-run-quick-ledger]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (button.disabled) return;
+      const template = listQuickLedger().find(item => item.id === button.dataset.runQuickLedger);
+      if (!template) {
+        renderHomeLedgerQuick(root, options);
+        return;
+      }
+      button.disabled = true;
+      try {
+        runQuickLedger(template);
+        options.notify?.(`已记「${template.name}」 ${money(template.amount)}`);
+        renderHomeLedgerQuick(root, options);
+      } catch (error) {
+        button.disabled = false;
+        options.notify?.(error instanceof Error ? error.message : "快捷记账失败");
+      }
+    });
+  });
+}
+
+function fillQuickLedgerForm(root, record = null) {
+  const form = root.querySelector("#quick-ledger-form");
+  if (!form) return;
+  const type = record?.type || "expense";
+  form.hidden = false;
+  form.querySelector('[name="id"]').value = record?.id || "";
+  form.querySelector('[name="name"]').value = record?.name || "";
+  form.querySelector('[name="amount"]').value = record?.amount ?? "";
+  form.querySelector('[name="payee"]').value = record?.payee || "";
+  form.querySelector('[name="note"]').value = record?.note || "";
+  form.querySelector('[name="tags"]').value = record?.tags?.join(" ") || "";
+  form.querySelectorAll("[data-quick-type]").forEach(button => {
+    button.setAttribute("aria-pressed", String(button.dataset.quickType === type));
+  });
+  const category = form.querySelector('[name="category"]');
+  category.innerHTML = categoryOptionsMarkup(type);
+  const categories = type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+  category.value = categories.includes(record?.category) ? record.category : categories[0];
+  form.querySelector('[name="account"]').value = record?.account || "微信";
+  form.querySelector(".quick-ledger-form-title").textContent = record ? "编辑快捷账目" : "新建快捷账目";
+  form.querySelector('[type="submit"]').innerHTML = `${icon("check")}${record ? "保存修改" : "保存快捷"}`;
+  form.scrollIntoView({ behavior: "smooth", block: "center" });
+  form.querySelector('[name="name"]')?.focus({ preventScroll: true });
+}
+
+function bindQuickLedgerPanel(root, options) {
+  const panel = root.querySelector(".ledger-quick-panel");
+  if (!panel) return;
+  const form = panel.querySelector("#quick-ledger-form");
+  const notify = message => options.notify?.(message);
+
+  panel.querySelectorAll("[data-new-quick-ledger]").forEach(button => {
+    button.addEventListener("click", () => fillQuickLedgerForm(root));
+  });
+  panel.querySelectorAll("[data-cancel-quick-ledger]").forEach(button => {
+    button.addEventListener("click", () => {
+      form.hidden = true;
+      form.reset();
+    });
+  });
+  panel.querySelectorAll("[data-ledger-quick-manage]").forEach(button => {
+    button.addEventListener("click", () => {
+      panel.scrollIntoView({ behavior: "smooth", block: "start" });
+      fillQuickLedgerForm(root);
+    });
+  });
+  form.querySelectorAll("[data-quick-type]").forEach(button => {
+    button.addEventListener("click", () => {
+      const type = button.dataset.quickType;
+      form.querySelectorAll("[data-quick-type]").forEach(item => {
+        item.setAttribute("aria-pressed", String(item === button));
+      });
+      const category = form.querySelector('[name="category"]');
+      category.innerHTML = categoryOptionsMarkup(type);
+      category.value = (type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES)[0];
+    });
+  });
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const type = form.querySelector('[data-quick-type][aria-pressed="true"]')?.dataset.quickType;
+    try {
+      const editing = Boolean(data.get("id"));
+      saveQuickLedger({
+        id: data.get("id") || undefined,
+        name: data.get("name"),
+        type,
+        amount: data.get("amount"),
+        category: data.get("category"),
+        account: data.get("account"),
+        payee: data.get("payee"),
+        note: data.get("note"),
+        tags: data.get("tags"),
+      });
+      notify(editing ? "快捷账目已更新" : "快捷账目已创建，可从首页一键入账");
+      renderLedgerPage(root, options);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "快捷账目保存失败");
+    }
+  });
+
+  panel.querySelectorAll("[data-run-quick-ledger]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (button.disabled) return;
+      const template = listQuickLedger().find(item => item.id === button.dataset.runQuickLedger);
+      if (!template) {
+        renderLedgerPage(root, options);
+        return;
+      }
+      button.disabled = true;
+      try {
+        runQuickLedger(template);
+        ledgerState.month = monthStart(new Date());
+        notify(`已记「${template.name}」 ${money(template.amount)}`);
+        renderLedgerPage(root, options);
+      } catch (error) {
+        button.disabled = false;
+        notify(error instanceof Error ? error.message : "快捷记账失败");
+      }
+    });
+  });
+  panel.querySelectorAll("[data-edit-quick-ledger]").forEach(button => {
+    button.addEventListener("click", () => {
+      const record = listQuickLedger().find(item => item.id === button.dataset.editQuickLedger);
+      if (record) fillQuickLedgerForm(root, record);
+    });
+  });
+  panel.querySelectorAll("[data-delete-quick-ledger]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const record = listQuickLedger().find(item => item.id === button.dataset.deleteQuickLedger);
+      if (!record) return;
+      const confirmAction = typeof options.confirmAction === "function"
+        ? options.confirmAction
+        : (title, body) => Promise.resolve(window.confirm(`${title}\n${body}`));
+      const confirmed = await confirmAction(
+        "删除这个快捷账目？",
+        `「${record.name}」的快捷按钮会被删除，已经记下的账目会保留。`,
+      );
+      if (!confirmed) return;
+      deleteQuickLedger(record.id);
+      notify("快捷账目已删除");
+      renderLedgerPage(root, options);
+    });
+  });
+}
+
 function ledgerSummary(items) {
   return items.reduce((summary, item) => {
     if (item.type === "income") summary.income += item.amount;
@@ -589,6 +804,7 @@ function downloadLedgerCsv(items, filename) {
 function renderLedgerPage(root, options = {}) {
   ledgerOptions = options;
   const allItems = listLedger();
+  const quickItems = listQuickLedger();
   const monthItems = allItems.filter(item => sameMonth(item.at, ledgerState.month));
   const summary = ledgerSummary(monthItems);
   summary.balance = summary.income - summary.expenses;
@@ -613,6 +829,47 @@ function renderLedgerPage(root, options = {}) {
       <article><span class="ledger-summary-icon is-expense">${icon("trendDown")}</span><div><small>本月支出</small><strong>${money(summary.expenses)}</strong></div></article>
       <article class="is-balance"><span class="ledger-summary-icon">${icon("wallet")}</span><div><small>本月结余</small><strong class="${summary.balance < 0 ? "is-negative" : ""}">${money(summary.balance)}</strong></div></article>
       <article><span class="ledger-summary-icon is-count">${icon("list")}</span><div><small>记录笔数</small><strong>${summary.count}<em> 笔</em></strong></div></article>
+    </section>
+
+    <section class="life-panel ledger-quick-panel" aria-labelledby="quick-ledger-title">
+      <header class="life-panel-head ledger-quick-head">
+        <div><p>ONE-TAP LEDGER</p><h2 id="quick-ledger-title">快捷记账 <span>${quickItems.length} 个</span></h2></div>
+        <button class="life-soft-button" type="button" data-new-quick-ledger>${icon("plus")}新建快捷</button>
+      </header>
+      ${quickItems.length
+        ? `<div class="ledger-quick-grid">${quickLedgerCardsMarkup(quickItems)}</div>`
+        : `<div class="ledger-quick-empty">
+            <span>${icon("zap")}</span>
+            <div><b>把每天重复的账目变成一键按钮</b><p>例如“上班地铁 2.70 元”和“下班地铁 2.70 元”，设好后可在首页直接点击入账。</p></div>
+            <button type="button" data-ledger-quick-manage>${icon("plus")}设置第一个快捷</button>
+          </div>`}
+      <form class="quick-ledger-form" id="quick-ledger-form" autocomplete="off" hidden>
+        <header>
+          <div><p>QUICK ENTRY SETTINGS</p><h3 class="quick-ledger-form-title">新建快捷账目</h3></div>
+          <button type="button" data-cancel-quick-ledger>取消</button>
+        </header>
+        <input type="hidden" name="id">
+        <div class="quick-ledger-form-grid">
+          <label class="life-field"><span>快捷名称</span><input name="name" maxlength="24" required placeholder="例如：上班地铁"></label>
+          <label class="life-field"><span>金额</span><div class="life-number-field"><input name="amount" type="number" min="0.01" max="1000000000000" step="0.01" inputmode="decimal" required placeholder="0.00"><b>元</b></div></label>
+          <div class="life-field">
+            <span>收支类型</span>
+            <div class="quick-ledger-type" role="group" aria-label="快捷账目收支类型">
+              <button type="button" data-quick-type="expense" aria-pressed="true">支出</button>
+              <button type="button" data-quick-type="income" aria-pressed="false">收入</button>
+            </div>
+          </div>
+          <label class="life-field"><span>分类</span><select name="category">${categoryOptionsMarkup("expense")}</select></label>
+          <label class="life-field"><span>账户或支付方式</span><select name="account">${ACCOUNTS.map(value => `<option value="${value}">${value}</option>`).join("")}</select></label>
+          <label class="life-field"><span>商户或对方 <small>选填</small></span><input name="payee" maxlength="80" placeholder="例如：地铁"></label>
+          <label class="life-field is-wide"><span>备注 <small>选填</small></span><input name="note" maxlength="500" placeholder="例如：工作日通勤"></label>
+          <label class="life-field is-wide"><span>标签 <small>空格或逗号分隔</small></span><input name="tags" maxlength="500" placeholder="例如：通勤 工作日"></label>
+        </div>
+        <div class="quick-ledger-form-actions">
+          <button class="secondary" type="button" data-cancel-quick-ledger>取消</button>
+          <button class="primary" type="submit">${icon("plus")}保存快捷</button>
+        </div>
+      </form>
     </section>
 
     <div class="ledger-workgrid">
@@ -650,6 +907,7 @@ function renderLedgerPage(root, options = {}) {
   const notify = message => {
     if (typeof options.notify === "function") options.notify(message);
   };
+  bindQuickLedgerPanel(root, options);
   const form = root.querySelector("#ledger-form");
 
   form.querySelectorAll("[data-ledger-type]").forEach(button => {

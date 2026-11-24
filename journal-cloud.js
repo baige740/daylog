@@ -51,6 +51,7 @@ function writeSettings(value) {
     lifeCount: Number(value.lifeCount) || 0,
     weightCount: Number(value.weightCount) || 0,
     ledgerCount: Number(value.ledgerCount) || 0,
+    quickLedgerCount: Number(value.quickLedgerCount) || 0,
   };
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(config));
   return config;
@@ -295,6 +296,7 @@ export function getJournalCloudState() {
     lifeCount: config.lifeCount,
     weightCount: config.weightCount,
     ledgerCount: config.ledgerCount,
+    quickLedgerCount: config.quickLedgerCount,
   };
 }
 
@@ -308,7 +310,7 @@ export async function uploadJournalBackup({ force = false } = {}) {
     emit({ phase: "uploading", message: "正在加密并上传手记…", config });
     const { payload, counts } = await buildJournalBackup();
     if (!counts.records && !counts.drafts && !counts.media && !counts.lifeCount) {
-      const message = "还没有可上传的手记、体重或账目。";
+      const message = "还没有可上传的手记、体重、账目或快捷记账。";
       const updated = saveSettings({ lastMessage: message, lastError: "" });
       emit({ phase: "empty", message, config: updated, counts });
       return { skipped: true, message, counts };
@@ -354,6 +356,7 @@ export async function uploadJournalBackup({ force = false } = {}) {
       lifeCount: counts.lifeCount,
       weightCount: counts.weightCount,
       ledgerCount: counts.ledgerCount,
+      quickLedgerCount: counts.quickLedgerCount,
     });
     emit({
       phase: "success",
@@ -429,6 +432,7 @@ function localFingerprint() {
       || key === "daylog:life:profile:v1"
       || key === "daylog:life:weights:v1"
       || key === "daylog:life:ledger:v1"
+      || key === "daylog:life:quick-ledger:v1"
     ) {
       keys.push(key);
     }
