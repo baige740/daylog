@@ -102,12 +102,21 @@ export function validEntry(data){
   const mood=normalizeMood(data.mood);if(mood!==null)record.mood=mood;
   const style=normalizeStyle(data.style,DEFAULT_STYLE);if(data.style&&typeof data.style==='object')record.style=style;
   if(data.task && typeof data.task==='object') record.task={done:data.task.done===true,sourceId:/^[\w-]{1,80}$/.test(data.task.sourceId||'')?data.task.sourceId:''};
+  const validId=id=>/^[\w-]{1,80}$/.test(id||'');
+  if(Array.isArray(data.people))record.people=[...new Set(data.people.filter(validId))].slice(0,50);
+  if(data.person&&typeof data.person==='object'){
+    const person=data.person;
+    record.person={name:String(person.name||'').trim().slice(0,80),birthday:String(person.birthday||'').slice(0,10),likes:String(person.likes||'').slice(0,2000),notes:String(person.notes||'').slice(0,4000)};
+    if(person.vault&&typeof person.vault==='object'&&['salt','iv','cipher'].every(k=>typeof person.vault[k]==='string'&&/^[A-Za-z0-9+/=]+$/.test(person.vault[k])&&person.vault[k].length<100000))record.person.vault={salt:person.vault.salt,iv:person.vault.iv,cipher:person.vault.cipher};
+    if(!record.person.name)throw new Error('人物姓名不能为空');
+  }
+  if(data.capsule&&typeof data.capsule==='object'&&/^\d{4}-\d{2}-\d{2}$/.test(data.capsule.openDate||''))record.capsule={openDate:data.capsule.openDate,opened:data.capsule.opened===true};
   if(data.schemaVersion===2)record.schemaVersion=2;
   return record
 }
-export function entries(){
+export function entries({includeSpecial=false}={}){
   const result=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith(prefix)){try{result.push(validEntry(JSON.parse(localStorage.getItem(k))))}catch{}}}
-  return result.sort((a,b)=>b.at.localeCompare(a.at)||b.id.localeCompare(a.id))
+  return result.filter(r=>includeSpecial||(!r.person&&!r.capsule)).sort((a,b)=>b.at.localeCompare(a.at)||b.id.localeCompare(a.id))
 }
 export function write(data){const r=validEntry(data);localStorage.setItem(prefix+r.id,JSON.stringify(r));return r}
 export function remove(id){localStorage.removeItem(prefix+id)}

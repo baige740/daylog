@@ -253,7 +253,7 @@ async function request(path, options = {}) {
 }
 
 export async function buildJournalBackup() {
-  const records = entries();
+  const records = entries({includeSpecial:true});
   const drafts = storedDraftEntries();
   const life = getLifeBackupData();
   const lifeSummary = lifeCounts(life);

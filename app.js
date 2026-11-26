@@ -1,4 +1,5 @@
 import {appVersion} from './version.js';
+import {renderMemoryPage,openPeopleLink} from './memories.js';
 import {smartType,pastePlain} from './writing.js';
 import {icon,paintIcons} from './icons.js';
 import {startMarket} from './market.js';
@@ -8,7 +9,7 @@ import {DEFAULT_STYLE,applyDocumentStyle,contextBadgeMarkup,firstImageFiles,mood
 import {addImagesToEditor,cleanupUnreferencedMedia,deleteMediaAssets,hydrateMedia,importMediaAssets,referencedMediaIds,saveImageAsset} from './media.js';
 import {renderStatsPage} from './insights.js';
 import {getLifeBackupData,lifeCounts,mergeLifeBackup,normaliseLifeBackup,restoreLifeStorage,snapshotLifeStorage} from './life-data.js';
-import {renderHomeLedgerQuick,renderLedgerPage,renderWellnessPage,stopWellnessTicker} from './life-ui.js';
+import {renderHomeLedgerQuick,renderLedgerPage,renderWellnessPage,stopWellnessTicker,focusLedgerRecord} from './life-ui.js';
 import {buildJournalBackup,getJournalCloudState,replaceJournalSyncCode,restoreJournalBackup,startJournalCloud,uploadJournalBackup} from './journal-cloud.js';
 const $=s=>document.querySelector(s);
 const editor=$('#editor'),dialog=$('#dialog'),dialogBody=$('#dialog-content');
@@ -16,7 +17,7 @@ const editorSurface=$('#editor-surface'),contextButton=$('#locate-weather'),mood
 const tabs=[['note','dotpen'],['trade','activity'],['reflect','bulb'],['quote','quote']];
 const places={
   home:['今日总览','grid'],history:['记录时间线','history'],favorites:['我的收藏','bookmark'],
-  wellness:['体重与年龄','scale'],ledger:['记账','wallet'],
+  wellness:['体重与年龄','scale'],ledger:['记账','wallet'],memories:['生活回忆','history'],
   reading:['阅读','book'],stats:['记录统计','chart'],
   trading:['交易与反思','#799e83',['trade','reflect']],life:['日常生活','#c9ac77',['note','poop','pee','water','walk']],feelings:['心情日记','#c58d7f',['mood']],quotes:['金句摘录','#9794b3',['quote']]
 };
@@ -64,16 +65,18 @@ function renderNav(){
 function navigate(next,date=''){
   stopWellnessTicker();
   view=Object.hasOwn(places,next)?next:'home';query='';typeFilter='';dayFilter=date;setMenu(false);
-  const archiveView=!['home','stats','reading','wellness','ledger'].includes(view);
+  const archiveView=!['home','stats','reading','wellness','ledger','memories'].includes(view);
   $('#dashboard').hidden=view!=='home';
   $('#archive').hidden=!archiveView;
   $('#stats').hidden=view!=='stats';
   $('#wellness').hidden=view!=='wellness';
   $('#ledger').hidden=view!=='ledger';
   $('#reading').hidden=view!=='reading';
+  $('#memories').hidden=view!=='memories';
   $('#crumb').textContent=places[view][0];document.title='日迹 Daylog · '+places[view][0];
   renderNav();renderRecords();
-  if(view==='reading')renderReading();
+  if(view==='memories')renderMemoryPage($('#memories'),memoryCallbacks);
+  else if(view==='reading')renderReading();
   else if(view==='stats')renderStats();
   else if(view==='wellness')renderWellnessPage($('#wellness'),{notify:toast,confirmAction:askConfirm});
   else if(view==='ledger')renderLedgerPage($('#ledger'),{notify:toast,confirmAction:askConfirm});
@@ -149,7 +152,7 @@ function entry(r){
   const environment=(r.context||Number.isInteger(r.mood))
     ?'<div class="entry-context-line">'+recordMoodMarkup(r)+contextBadgeMarkup(r.context,{compact:true})+'</div>':'';
 
-  return '<article class="entry" data-id="'+r.id+'"><div class="entry-head"><time>'+clock(r.at)+'</time><span class="entry-type">'+types[r.type]+(isArticle?' · 长文':'')+'</span><div class="entry-buttons"><button class="icon-btn '+(r.fav?'liked':'')+'" data-action="fav" aria-label="'+(r.fav?'取消收藏':'收藏')+'" title="'+(r.fav?'取消收藏':'收藏')+'">'+icon('bookmark')+'</button>'+edit+'<button class="icon-btn" data-action="task" aria-label="从记录添加待办" title="添加待办">✓</button><button class="icon-btn" data-action="delete" aria-label="删除" title="删除">'+icon('trash')+'</button></div></div>'+environment+content+'</article>'
+  return '<article class="entry" data-id="'+r.id+'"><div class="entry-head"><time>'+clock(r.at)+'</time><span class="entry-type">'+types[r.type]+(isArticle?' · 长文':'')+'</span><div class="entry-buttons"><button class="icon-btn '+(r.fav?'liked':'')+'" data-action="fav" aria-label="'+(r.fav?'取消收藏':'收藏')+'" title="'+(r.fav?'取消收藏':'收藏')+'">'+icon('bookmark')+'</button>'+edit+'<button class="icon-btn" data-action="people" aria-label="关联人物" title="关联人物">♙</button><button class="icon-btn" data-action="task" aria-label="从记录添加待办" title="添加待办">✓</button><button class="icon-btn" data-action="delete" aria-label="删除" title="删除">'+icon('trash')+'</button></div></div>'+environment+content+'</article>'
 }
 function decorateEntries(root=document){
   root.querySelectorAll('.entry[data-id]').forEach(node=>{
@@ -230,7 +233,15 @@ function renderRecords(){
   renderArticleDrafts();renderCal();renderMoments();
   if(view==='stats')renderStats();else if(view!=='home'&&$('#archive-list'))renderArchiveList()
 }
+const memoryCallbacks={notify:toast, refresh:()=>{renderRecords();renderMemoryPage($('#memories'),memoryCallbacks)}, openRecord:(r)=>{navigate('history',dateKey(r.at));requestAnimationFrame(()=>document.querySelector('#archive-list [data-id="'+CSS.escape(r.id)+'"]')?.scrollIntoView({block:'center'}))}, openLedger:(item)=>{navigate('ledger');focusLedgerRecord($('#ledger'),item,{notify:toast,confirmAction:askConfirm})}, dialog:openDialog, close:()=>dialog.close(), confirm:askConfirm};
+$('#weekly-details').onclick=()=>{navigate('memories');document.querySelector('#memory-week')?.scrollIntoView()};
 function renderMoments(){
+  const now=new Date(),annual=Date.UTC(2000,now.getMonth(),now.getDate());
+  const old=records.filter(r=>{const d=new Date(r.at);if(d.getFullYear()>=now.getFullYear())return false;const v=Date.UTC(2000,d.getMonth(),d.getDate()),delta=Math.abs(annual-v);return Math.min(delta,366*86400000-delta)<=3*86400000}).slice(0,3);
+  const ready=entries({includeSpecial:true}).filter(r=>r.capsule&&r.capsule.openDate<=dateKey(now)&&!r.capsule.opened);
+  $('#home-memories').innerHTML=(ready.length?'<button type="button" class="weekly-entry" id="home-capsules">有 '+ready.length+' 封时间胶囊可以打开 →</button>':'')+(old.length?old.map(r=>'<button type="button" class="weekly-entry" data-home-memory="'+esc(r.id)+'">'+dateKey(r.at)+' · '+esc(plain(r.html).slice(0,50)||'图片记录')+'</button>').join(''):'<p>还没有这个时间附近的往年记录。</p>');
+  $('#home-capsules')?.addEventListener('click',()=>navigate('memories'));
+  $('#home-memories').querySelectorAll('[data-home-memory]').forEach(b=>b.onclick=()=>{const r=records.find(x=>x.id===b.dataset.homeMemory);if(r)memoryCallbacks.openRecord(r)});
   const tasks=records.filter(r=>r.task&&!r.task.done);
   $('#task-list').innerHTML='<h3>待办 <small>'+tasks.length+'</small></h3>'+(tasks.length?tasks.map(r=>'<div class="moment-task"><button type="button" data-task-done="'+esc(r.id)+'" aria-label="完成待办">○</button><span>'+esc(plain(r.html))+'</span>'+(r.task.sourceId?'<button type="button" data-task-source="'+esc(r.task.sourceId)+'">来源</button>':'')+'</div>').join(''):'<p>还没有待办，想到的事可以先记在这里。</p>');
   const completed=records.filter(r=>r.task&&r.task.done);
@@ -315,6 +326,7 @@ function applyDraftMeta(){
   applyEditorStyle();
   updateMoodPicker(moodButtons,currentMood);
   updateContextButton(contextButton,currentContext);
+  $('#entry-place').value=currentContext?.place||'';
 }
 function readLightDraft(tab){
   const raw=localStorage.getItem('daylog:draft:'+tab);
@@ -405,6 +417,7 @@ document.querySelectorAll('[data-format]').forEach(b=>{b.onmousedown=e=>e.preven
   if(cmd==='quote'){document.execCommand('formatBlock',false,getSelection().anchorNode?.parentElement?.closest('blockquote')?'div':'blockquote')}else document.execCommand(cmd,false,null);storeDraft()
 }});
 contextButton.onclick=locateWeather;
+$('#entry-place').addEventListener('input',e=>{const place=e.target.value.trim();currentContext=place?normalizeContext({...currentContext,place}):null;storeDraft()});
 moodButtons.addEventListener('click',event=>{
   const button=event.target.closest('[data-entry-mood]');
   if(!button)return;
@@ -441,7 +454,7 @@ function save(){
 }
 $('#save').onclick=save;$('#all-entries').onclick=()=>navigate('history');
 function editRecord(r){
-  openDialog('编辑记录','<label class="when">事件时间<input class="field" id="edit-when" required type="datetime-local" value="'+dateKey(r.at)+'T'+clock(r.at)+'"></label><div id="edit-text" class="edit-box" contenteditable="true" role="textbox" aria-label="编辑记录正文">'+r.html+'</div><div class="dialog-actions"><button class="secondary" id="cancel-edit">取消</button><button class="primary" id="apply-edit">保存修改</button></div>');
+  openDialog('编辑记录','<label class="when">事件时间<input class="field" id="edit-when" required type="datetime-local" value="'+dateKey(r.at)+'T'+clock(r.at)+'"></label><label class="when">地点<input class="field" id="edit-place" maxlength="80" value="'+esc(r.context?.place||'')+'" placeholder="例如：杭州"></label><div id="edit-text" class="edit-box" contenteditable="true" role="textbox" aria-label="编辑记录正文">'+r.html+'</div><div class="dialog-actions"><button class="secondary" id="cancel-edit">取消</button><button class="primary" id="apply-edit">保存修改</button></div>');
   const box=$('#edit-text');
   const addedMediaIds=[];
   applyDocumentStyle(box,r.style,lightStyleBase);
@@ -478,7 +491,7 @@ function editRecord(r){
     safeAction(()=>{
       const latest=entries().find(item=>item.id===r.id);if(!latest){dialog.close();renderRecords();toast('这条记录已删除');return}
       const at=when.value===dateKey(r.at)+'T'+clock(r.at)?r.at:new Date(when.value).toISOString();
-      write({...latest,at,html:smart?formatHTML(box.innerHTML):cleanHTML(box.innerHTML)});
+      write({...latest,at,context:$('#edit-place').value.trim()?normalizeContext({...latest.context,place:$('#edit-place').value.trim()}):null,html:smart?formatHTML(box.innerHTML):cleanHTML(box.innerHTML)});
       const refs=referencedMediaIds(entries(),storedDrafts());
       deleteMediaAssets(addedMediaIds.filter(id=>!refs.has(id))).catch(()=>null);
       dialogCleanup=null;dialog.close();renderRecords();toast('修改已保存')
@@ -537,7 +550,7 @@ async function importBackupData(data,statusElement){
       if(data.version>=3&&undeclared.length)throw new Error('backup media incomplete');
       importedMediaIds=(await importMediaAssets(data.media)).addedIds;
     }
-    const existing=new Set(entries().map(record=>record.id));
+    const existing=new Set(entries({includeSpecial:true}).map(record=>record.id));
     for(const record of incoming){
       if(existing.has(record.id))continue;
       write(record);existing.add(record.id);addedIds.push(record.id);
@@ -691,6 +704,7 @@ document.addEventListener('click',e=>{
   else if(d.result){const r=records.find(r=>r.id===d.result);if(r)editRecord(r)}
   else if(d.action){
     const id=b.closest('[data-id]')?.dataset.id,r=entries().find(v=>v.id===id);if(!r){renderRecords();return}
+    if(d.action==='people')openPeopleLink(r,{...memoryCallbacks,refresh:renderRecords});
     if(d.action==='task'){openDialog('从记录添加待办','<p>编辑要做的事情，保存后可从待办回到这条记录。</p><textarea id="task-from-entry" class="field" rows="3" maxlength="1000">'+esc(plain(r.html).slice(0,1000))+'</textarea><div class="dialog-actions"><button class="primary" id="task-from-save">加入待办</button></div>');$('#task-from-save').onclick=()=>safeAction(()=>{const text=$('#task-from-entry').value.trim();if(!text){toast('请填写待办内容');return}create('note',esc(text).replace(/\n/g,'<br>'),{task:{done:false,sourceId:r.id}});dialog.close();renderRecords();toast('已加入待办')});}
     if(d.action==='fav')safeAction(()=>{write({...r,fav:!r.fav});renderRecords();toast(r.fav?'已取消收藏':'已加入我的收藏')});
     if(d.action==='edit')editRecord(r);

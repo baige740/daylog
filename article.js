@@ -357,6 +357,7 @@ function saveArticle(){
       title:title.value.trim(),
       html:smart?formatHTML(body.innerHTML):cleanHTML(body.innerHTML),
       fav:latest?.fav||false,
+      people:latest?.people||[],
       revision:uid(),
       context:currentContext,
       mood:currentMood,

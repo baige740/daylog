@@ -997,3 +997,8 @@ export function stopWellnessTicker() {
 }
 
 export { renderWellnessPage, renderLedgerPage };
+
+export function focusLedgerRecord(root,item,options={}){
+  ledgerState.month=monthStart(new Date(item.at));ledgerState.query='';ledgerState.type='';renderLedgerPage(root,options);
+  requestAnimationFrame(()=>root.querySelector('[data-ledger-id="'+CSS.escape(item.id)+'"]')?.scrollIntoView({block:'center'}));
+}
