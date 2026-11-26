@@ -170,3 +170,5 @@ main.chat { grid-template-columns: minmax(0, 1fr); }
   body.chat-keyboard .composer-area { padding-bottom:max(6px,env(safe-area-inset-bottom)); }
   body.chat-keyboard #thread { padding-bottom:4px; }
 }
+
+#journal-search-form{display:flex;gap:8px}#journal-search{flex:1;min-width:0;padding:10px;font:inherit}#journal-results{display:grid;gap:8px;max-height:50vh;overflow:auto;margin-top:12px}.journal-result{display:grid;gap:5px;text-align:left;padding:12px;border:1px solid #dce8df;border-radius:10px;background:white;color:#274c3b;font:inherit}.journal-result span{white-space:pre-wrap;overflow-wrap:anywhere}

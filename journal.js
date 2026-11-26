@@ -101,6 +101,7 @@ export function validEntry(data){
   const context=normalizeContext(data.context);if(context)record.context=context;
   const mood=normalizeMood(data.mood);if(mood!==null)record.mood=mood;
   const style=normalizeStyle(data.style,DEFAULT_STYLE);if(data.style&&typeof data.style==='object')record.style=style;
+  if(data.task && typeof data.task==='object') record.task={done:data.task.done===true,sourceId:/^[\w-]{1,80}$/.test(data.task.sourceId||'')?data.task.sourceId:''};
   if(data.schemaVersion===2)record.schemaVersion=2;
   return record
 }

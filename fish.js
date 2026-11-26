@@ -1,5 +1,6 @@
 import {appVersion} from './version.js';
-import { createStaticApi } from './fish-static-api.js?v=20261124b';
+import {entries,plain,dateKey} from './journal.js';
+import { createStaticApi } from './fish-static-api.js?v=20261126a';
 
 const byId = id => document.getElementById(id);
 const versionLabel = byId('app-version');
@@ -901,3 +902,14 @@ if (staticMode) {
   byId('sync').textContent = '重新加载资料';
 }
 loadState();
+
+const journalPanel=byId('journal-panel');
+byId('journal-find').onclick=()=>{journalPanel.showModal();byId('journal-search').focus()};
+byId('journal-close').onclick=()=>journalPanel.close();
+byId('journal-search-form').onsubmit=e=>{
+  e.preventDefault();const q=byId('journal-search').value.trim().toLocaleLowerCase(),box=byId('journal-results');box.replaceChildren();
+  if(!q){box.textContent='请输入关键词';return}
+  const found=entries().filter(r=>(String(r.title||'')+' '+plain(r.html)).toLocaleLowerCase().includes(q)).slice(0,30);
+  if(!found.length){box.textContent='没有找到匹配的日记';return}
+  found.forEach(r=>{const button=document.createElement('button');button.type='button';button.className='journal-result';const date=document.createElement('b');date.textContent=dateKey(r.at);const snippet=document.createElement('span');snippet.textContent=(r.title?r.title+'：':'')+plain(r.html).slice(0,300);button.append(date,snippet);button.onclick=()=>{const input=byId('question'),excerpt='日记（'+dateKey(r.at)+'）：'+(r.title?r.title+'：':'')+plain(r.html).slice(0,1500);input.value=(input.value.trim()?input.value.trim()+'\n\n':'')+excerpt+'\n请结合这条日记回答：';input.dispatchEvent(new Event('input',{bubbles:true}));journalPanel.close();input.focus()};box.append(button)});
+};

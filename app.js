@@ -149,7 +149,7 @@ function entry(r){
   const environment=(r.context||Number.isInteger(r.mood))
     ?'<div class="entry-context-line">'+recordMoodMarkup(r)+contextBadgeMarkup(r.context,{compact:true})+'</div>':'';
 
-  return '<article class="entry" data-id="'+r.id+'"><div class="entry-head"><time>'+clock(r.at)+'</time><span class="entry-type">'+types[r.type]+(isArticle?' · 长文':'')+'</span><div class="entry-buttons"><button class="icon-btn '+(r.fav?'liked':'')+'" data-action="fav" aria-label="'+(r.fav?'取消收藏':'收藏')+'" title="'+(r.fav?'取消收藏':'收藏')+'">'+icon('bookmark')+'</button>'+edit+'<button class="icon-btn" data-action="delete" aria-label="删除" title="删除">'+icon('trash')+'</button></div></div>'+environment+content+'</article>'
+  return '<article class="entry" data-id="'+r.id+'"><div class="entry-head"><time>'+clock(r.at)+'</time><span class="entry-type">'+types[r.type]+(isArticle?' · 长文':'')+'</span><div class="entry-buttons"><button class="icon-btn '+(r.fav?'liked':'')+'" data-action="fav" aria-label="'+(r.fav?'取消收藏':'收藏')+'" title="'+(r.fav?'取消收藏':'收藏')+'">'+icon('bookmark')+'</button>'+edit+'<button class="icon-btn" data-action="task" aria-label="从记录添加待办" title="添加待办">✓</button><button class="icon-btn" data-action="delete" aria-label="删除" title="删除">'+icon('trash')+'</button></div></div>'+environment+content+'</article>'
 }
 function decorateEntries(root=document){
   root.querySelectorAll('.entry[data-id]').forEach(node=>{
@@ -227,9 +227,27 @@ function renderRecords(){
   updateQuickCounts(today);
   decorateEntries($('#today-list'));
   renderHomeLedgerQuick($('#home-ledger-quick'),{notify:toast,navigate});
-  renderArticleDrafts();renderCal();
+  renderArticleDrafts();renderCal();renderMoments();
   if(view==='stats')renderStats();else if(view!=='home'&&$('#archive-list'))renderArchiveList()
 }
+function renderMoments(){
+  const tasks=records.filter(r=>r.task&&!r.task.done);
+  $('#task-list').innerHTML='<h3>待办 <small>'+tasks.length+'</small></h3>'+(tasks.length?tasks.map(r=>'<div class="moment-task"><button type="button" data-task-done="'+esc(r.id)+'" aria-label="完成待办">○</button><span>'+esc(plain(r.html))+'</span>'+(r.task.sourceId?'<button type="button" data-task-source="'+esc(r.task.sourceId)+'">来源</button>':'')+'</div>').join(''):'<p>还没有待办，想到的事可以先记在这里。</p>');
+  const completed=records.filter(r=>r.task&&r.task.done);
+  if(completed.length) $('#task-list').insertAdjacentHTML('beforeend','<details><summary>已完成 '+completed.length+'</summary>'+completed.map(r=>'<div class="moment-task"><button type="button" data-task-undo="'+esc(r.id)+'" aria-label="恢复待办">✓</button><span>'+esc(plain(r.html))+'</span></div>').join('')+'</details>');
+  const start=new Date(); start.setHours(0,0,0,0); start.setDate(start.getDate()-6);
+  const recent=records.filter(r=>new Date(r.at)>=start && new Date(r.at)<=new Date());
+  const days=new Set(recent.map(r=>dateKey(r.at))).size;
+  const words=recent.reduce((n,r)=>n+plain(r.html).length,0);
+  $('#weekly-summary').innerHTML='<p>记录了 <b>'+recent.length+'</b> 条，陪伴了 <b>'+days+'</b> 天，共写下 <b>'+words+'</b> 字。</p>'+(recent.length?recent.slice(0,3).map(r=>'<button class="weekly-entry" type="button" data-weekly-date="'+dateKey(r.at)+'">'+dateKey(r.at)+' · '+esc(plain(r.html).slice(0,60)||'图片记录')+'</button>').join(''):'<p>从今天开始，留下一点生活的痕迹。</p>');
+  $('#weekly-summary').querySelectorAll('[data-weekly-date]').forEach(b=>b.onclick=()=>navigate('history',b.dataset.weeklyDate));
+  $('#task-list').querySelectorAll('[data-task-done]').forEach(b=>b.onclick=()=>safeAction(()=>{const r=entries().find(x=>x.id===b.dataset.taskDone);if(r){write({...r,task:{...r.task,done:true}});renderRecords();toast('待办已完成')}}));
+  $('#task-list').querySelectorAll('[data-task-undo]').forEach(b=>b.onclick=()=>safeAction(()=>{const r=entries().find(x=>x.id===b.dataset.taskUndo);if(r){write({...r,task:{...r.task,done:false}});renderRecords();toast('已恢复待办')}}));
+  $('#task-list').querySelectorAll('[data-task-source]').forEach(b=>b.onclick=()=>{const r=entries().find(x=>x.id===b.dataset.taskSource);if(r)navigate('history',dateKey(r.at));else toast('原记录已删除')});
+}
+function saveInbox(task=false){safeAction(()=>{const input=$('#inbox-text'),text=input.value.trim();if(!text){toast('先写点内容吧');input.focus();return}create('note',esc(text).replace(/\n/g,'<br>'),task?{task:{done:false}}:{});input.value='';renderRecords();toast(task?'已加入待办':'已存入随手记')})}
+$('#inbox-form').addEventListener('submit',e=>{e.preventDefault();saveInbox()});
+$('#inbox-task').addEventListener('click',()=>saveInbox(true));
 function renderArchive(){
   const options=Object.entries(types).filter(([t])=>!places[view][2]||places[view][2].includes(t));
   $('#archive').innerHTML='<h1 class="archive-title">'+places[view][0]+'</h1><div class="archive-controls"><input class="field" id="query" type="search" aria-label="搜索当前记录" placeholder="搜索记录内容"><input class="field" style="flex:0 1 auto" type="date" id="date-filter" aria-label="按日期筛选" value="'+esc(dayFilter)+'"><select aria-label="按记录类型筛选" id="type-filter"><option value="">全部类型</option>'+options.map(([id,text])=>'<option value="'+id+'">'+text+'</option>').join('')+'</select><button class="secondary" id="clear-filters">重置</button></div><div id="archive-list"></div>';
@@ -673,6 +691,7 @@ document.addEventListener('click',e=>{
   else if(d.result){const r=records.find(r=>r.id===d.result);if(r)editRecord(r)}
   else if(d.action){
     const id=b.closest('[data-id]')?.dataset.id,r=entries().find(v=>v.id===id);if(!r){renderRecords();return}
+    if(d.action==='task'){openDialog('从记录添加待办','<p>编辑要做的事情，保存后可从待办回到这条记录。</p><textarea id="task-from-entry" class="field" rows="3" maxlength="1000">'+esc(plain(r.html).slice(0,1000))+'</textarea><div class="dialog-actions"><button class="primary" id="task-from-save">加入待办</button></div>');$('#task-from-save').onclick=()=>safeAction(()=>{const text=$('#task-from-entry').value.trim();if(!text){toast('请填写待办内容');return}create('note',esc(text).replace(/\n/g,'<br>'),{task:{done:false,sourceId:r.id}});dialog.close();renderRecords();toast('已加入待办')});}
     if(d.action==='fav')safeAction(()=>{write({...r,fav:!r.fav});renderRecords();toast(r.fav?'已取消收藏':'已加入我的收藏')});
     if(d.action==='edit')editRecord(r);
     if(d.action==='delete'){openDialog('删除这条记录？','<p>'+esc(plain(r.html).slice(0,100)||'这条图片记录')+'</p><div class="dialog-actions"><button class="secondary" id="keep">保留记录</button><button class="secondary danger" id="erase">确认删除</button></div>');$('#keep').onclick=()=>dialog.close();$('#erase').onclick=()=>safeAction(()=>{remove(r.id);localStorage.removeItem(articleDraftPrefix+r.id);dialog.close();renderRecords();cleanupUnreferencedMedia(entries(),storedDrafts()).catch(()=>null);toast('记录已删除')})}
