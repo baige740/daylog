@@ -226,9 +226,9 @@ function geolocationPosition() {
         reject(new Error("暂时无法获取位置，请稍后重试。"));
       }
     }, {
-      enableHighAccuracy: false,
-      timeout: 12000,
-      maximumAge: 10 * 60 * 1000,
+      enableHighAccuracy: true,
+      timeout: 20000,
+      maximumAge: 0,
     });
   });
 }
@@ -258,8 +258,12 @@ async function fetchPlace(latitude, longitude) {
     + "&localityLanguage=zh";
   try {
     const data = await fetchJson(url);
-    const city = cleanText(data.city || data.locality || data.principalSubdivision, 32);
-    return city || "当前位置";
+    const city=cleanText(data.city || data.principalSubdivision, 32);
+    const local=cleanText(data.locality, 32);
+    const administrative=Array.isArray(data.localityInfo?.administrative)?data.localityInfo.administrative:[];
+    const details=administrative.filter(item=>Number(item.adminLevel)>=6).map(item=>cleanText(item.name,32)).filter(Boolean);
+    const pieces=[city,...details,local].filter(Boolean);
+    return [...new Set(pieces)].filter((part,index,list)=>!list.some((other,i)=>i!==index&&other.length>part.length&&other.includes(part))).join(' · ').slice(0,80)||'当前位置';
   } catch {
     return "当前位置";
   }
@@ -282,8 +286,8 @@ export async function requestRecordContext() {
     fetchWeather(latitude, longitude),
   ]);
   const weatherData = weatherResult.status === "fulfilled" ? weatherResult.value?.current : null;
-  const code = Number.isFinite(Number(weatherData?.weather_code)) ? Number(weatherData.weather_code) : null;
-  const temperature = Number.isFinite(Number(weatherData?.temperature_2m))
+  const code = weatherData?.weather_code != null && Number.isFinite(Number(weatherData.weather_code)) ? Number(weatherData.weather_code) : null;
+  const temperature = weatherData?.temperature_2m != null && Number.isFinite(Number(weatherData.temperature_2m))
     ? Number(weatherData.temperature_2m)
     : null;
   const weather = weatherForCode(code).label;

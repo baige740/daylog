@@ -35,6 +35,7 @@ const uid=()=>globalThis.crypto.randomUUID?.()||Date.now()+'-'+Math.random().toS
 
 let id='',baseRevision=null,draftStamp=null,loadedDraftSignature='',editing=false,dirty=false,composing=false,timer=0,hasSavedDraft=false,split=false;
 let countTimer=0,typingTimer=0,compositionText='',compositionInkTimer=0;
+let pendingPhotos=0;
 let smart=localStorage.getItem('daylog:smart')!=='off',initialAt='',locationBusy=false;
 let currentContext=null,currentMood=null,currentStyle=normalizeStyle(null,DEFAULT_STYLE);
 
@@ -337,7 +338,9 @@ function entriesSafe(){
 }
 
 function saveArticle(){
-  if(!editing||composing)return;
+  if(!editing)return;
+  if(pendingPhotos){message('照片正在处理，请稍候',true);return}
+  composing=false;
   if(!when.reportValidity())return;
   if(!hasMeaningfulContent(body.innerHTML)){
     message('先写一段正文或添加一张图片',true);
@@ -403,13 +406,14 @@ async function addImages(files){
     message('一条记录最多添加 12 张图片',true);
     return;
   }
+  pendingPhotos++;$('#commit').disabled=true;message('照片正在处理，请稍候');
   try{
     const added=await addImagesToEditor(body,selected.slice(0,room),modified);
     if(added)message('已添加 '+added+' 张图片');
     if(selected.length>room)message('已保留前 '+room+' 张，单条记录最多 12 张',true);
   }catch(error){
     message(error instanceof Error?error.message:'图片添加失败，请检查本机存储空间',true);
-  }
+  }finally{pendingPhotos--;$('#commit').disabled=pendingPhotos>0}
 }
 
 async function setCustomBackground(file){

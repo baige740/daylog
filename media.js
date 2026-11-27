@@ -294,7 +294,7 @@ export async function addImagesToEditor(editor, files, onChange) {
   try {
     for (const file of selected) {
       const asset = await saveImageAsset(file);
-      hydrateMediaIntoEditor(editor, asset.id);
+      await hydrateMediaIntoEditor(editor, asset.id);
       count += 1;
     }
   } finally {
