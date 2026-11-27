@@ -1,0 +1,162 @@
+.stock-page {
+  --stock-muted: #526b60;
+  --stock-border: #dce6de;
+  min-width: 0;
+  padding-bottom: 16px;
+}
+
+.stock-page button:focus-visible,
+.stock-page select:focus-visible,
+.stock-page input:focus-visible,
+.stock-page textarea:focus-visible,
+.stock-method summary:focus-visible {
+  outline: 2px solid #297d59;
+  outline-offset: 2px;
+}
+
+.stock-page button:disabled { opacity: .5; cursor: default; }
+.stock-page h2 { font-size: 17px; }
+.stock-back, .stock-toolbar, .stock-holding-actions, .stock-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stock-back {
+  min-height: 34px;
+  margin: 0 0 6px -3px;
+  gap: 3px;
+  color: var(--stock-muted);
+  font-size: 13px;
+}
+
+.stock-back svg, .stock-toolbar svg { width: 16px; height: 16px; }
+.stock-toolbar { flex-wrap: wrap; }
+.stock-toolbar button, .stock-panel-head button { min-height: 42px; }
+.stock-toolbar .primary, .stock-form .primary { white-space: nowrap; }
+.ledger-stock-link { color: #174f3a; background: #e7f1e9; border-color: #cadfd1; }
+
+.stock-overview {
+  padding: clamp(14px, 2.4vw, 24px);
+  border: 1px solid #d7e4da;
+  border-radius: 16px;
+  background: #f0f6f1;
+}
+
+.stock-panel-head {
+  display: flex;
+  min-height: 42px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.stock-panel-head h2 { margin: 0; }
+.stock-panel-head h2 small { color: var(--stock-muted); font-size: 12px; margin-inline-start: 5px; font-weight: 500; }
+.stock-panel-head label { min-width: 0; }
+.stock-panel-head select { width: auto; max-width: min(180px, 42vw); min-height: 42px; }
+.stock-page select, .stock-form input, .stock-form textarea {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #cadbd0;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--life-ink);
+  font: inherit;
+}
+
+.stock-summary, .stock-holding-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 13px 0 0;
+}
+
+.stock-summary .stock-metric { padding: 12px; border-radius: 10px; background: #fff; }
+.stock-metric dt { color: var(--stock-muted); font-size: 12px; }
+.stock-metric dd {
+  margin: 3px 0 0;
+  font-size: clamp(15px, 2.2vw, 23px);
+  font-weight: 670;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.stock-metric small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--stock-muted);
+  font-weight: 500;
+}
+
+.stock-page .stock-gain { color: #aa382f; }
+.stock-page .stock-loss { color: #14714d; }
+.stock-section { margin-top: 20px; }
+.stock-holdings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(390px, 100%), 1fr)); gap: 12px; }
+.stock-holding, .stock-entries, .stock-empty {
+  min-width: 0;
+  border: 1px solid var(--stock-border);
+  border-radius: 12px;
+  background: #fcfdfa;
+}
+
+.stock-holding { padding: 14px; }
+.stock-holding > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.stock-holding h3 { margin: 0; font-size: 17px; }
+.stock-holding p, .stock-current span, .stock-entry p, .stock-entry-end small {
+  margin: 3px 0 0;
+  color: var(--stock-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.stock-current { text-align: right; min-width: 0; }
+.stock-current strong { font-size: 17px; font-variant-numeric: tabular-nums; }
+.stock-current span { display: block; }
+.stock-holding-metrics { padding-top: 12px; border-top: 1px solid var(--stock-border); }
+.stock-holding-metrics dd { font-size: 15px; }
+.stock-holding-actions { margin-top: 14px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.stock-holding-actions button { min-height: 40px; padding-inline: 4px; }
+.stock-status { color: var(--stock-muted); font-size: 12px; margin: 5px 0 8px; }
+.stock-status:empty { margin-top: 0; }
+.stock-entries { margin-top: 8px; }
+.stock-empty { padding: 20px 14px; color: var(--stock-muted); margin: 0; font-size: 13px; }
+.stock-entries .stock-empty { border: 0; }
+.stock-entry { display: grid; grid-template-columns: minmax(0, 1fr) minmax(90px, auto); gap: 10px; padding: 11px 14px; }
+.stock-entry + .stock-entry { border-top: 1px solid var(--stock-border); }
+.stock-entry-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.stock-entry p.stock-entry-note { color: var(--life-ink); }
+.stock-type { padding: 1px 6px; border-radius: 5px; background: #eaf1ea; font-size: 11px; color: #365846; white-space: nowrap; }
+.stock-type.is-buy { background: #faece8; color: #92382f; }
+.stock-type.is-sell { background: #e3f0e7; color: #236444; }
+.stock-entry-end { text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.stock-entry-end strong { font-variant-numeric: tabular-nums; }
+.stock-entry-end small { display: block; }
+.stock-entry-end button, .stock-close { min-height: 40px; min-width: 40px; border-radius: 8px; color: #486356; }
+.stock-entry-end button:hover, .stock-close:hover { background: #eaf2eb; }
+.stock-entry-end svg, .stock-close svg { width: 16px; height: 16px; vertical-align: middle; }
+.stock-more { margin-top: 10px; }
+.stock-method { margin: 16px 0 0; color: var(--stock-muted); font-size: 13px; }
+.stock-method summary { cursor: pointer; width: fit-content; min-height: 34px; }
+.stock-method p { margin: 2px 0; line-height: 1.7; }
+.stock-dialog .dialog-head { margin-bottom: 9px; gap: 8px; }
+.stock-dialog .dialog-head h2 { margin: 0; overflow-wrap: anywhere; font-size: 19px; }
+.stock-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+.stock-form label { display: grid; gap: 4px; font-size: 13px; min-width: 0; }
+.stock-form input, .stock-form select, .stock-form textarea { width: 100%; max-width: 100%; min-height: 42px; font-size: 16px; }
+.stock-form textarea { resize: vertical; }
+.stock-form > p, .stock-wide { grid-column: 1 / -1; }
+.stock-form > p { color: var(--stock-muted); font-size: 13px; margin: 0; }
+.stock-form-error { color: #942e26; font-size: 13px; line-height: 1.5; }
+.stock-form-actions { justify-content: flex-end; position: sticky; bottom: -1px; background: #fcfdfa; padding-top: 5px; }
+.stock-form-actions button { min-height: 42px; }
+
+@media (max-width: 640px) {
+  .stock-page-head { gap: 10px; flex-wrap: wrap; }
+  .stock-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stock-holding-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stock-entry { padding-inline: 10px; }
+  .stock-dialog { padding: 13px; }
+  .stock-holding-actions button, .stock-entry-end button, .stock-close { min-height: 44px; }
+}

@@ -1,3 +1,5 @@
+import { STOCK_STORAGE_KEY, mergeStockBackup, normalizeStockBackup, readStockData } from "./stock-data.js";
+
 export const LIFE_PROFILE_KEY = "daylog:life:profile:v1";
 export const LIFE_WEIGHTS_KEY = "daylog:life:weights:v1";
 export const LIFE_LEDGER_KEY = "daylog:life:ledger:v1";
@@ -8,6 +10,7 @@ export const LIFE_STORAGE_KEYS = [
   LIFE_WEIGHTS_KEY,
   LIFE_LEDGER_KEY,
   LIFE_QUICK_LEDGER_KEY,
+  STOCK_STORAGE_KEY,
 ];
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
@@ -304,6 +307,7 @@ export function normaliseLifeBackup(value) {
     quickLedger: Array.isArray(value.quickLedger)
       ? value.quickLedger.map(normalizeQuickLedger)
       : [],
+    stock: normalizeStockBackup(value.stock),
   };
 }
 
@@ -314,15 +318,17 @@ export function getLifeBackupData() {
     weights: listWeights(),
     ledger: listLedger(),
     quickLedger: listQuickLedger(),
+    stock: readStockData(),
   });
 }
 
 export function lifeCounts(data = getLifeBackupData()) {
   return {
-    lifeCount: data.profile || data.weights.length || data.ledger.length || data.quickLedger.length ? 1 : 0,
+    lifeCount: data.profile || data.weights.length || data.ledger.length || data.quickLedger.length || data.stock?.trades.length ? 1 : 0,
     weightCount: data.weights.length,
     ledgerCount: data.ledger.length,
     quickLedgerCount: data.quickLedger.length,
+    stockTradeCount: data.stock?.trades.length || 0,
   };
 }
 
@@ -340,6 +346,7 @@ export function restoreLifeStorage(snapshot) {
 
 export function mergeLifeBackup(value) {
   const incoming = normaliseLifeBackup(value);
+  const stockTradesAdded = mergeStockBackup(incoming.stock);
   const currentProfile = getLifeProfile();
   const incomingProfile = incoming.profile;
   if (
@@ -384,5 +391,6 @@ export function mergeLifeBackup(value) {
     weightsAdded: addedWeights.length,
     ledgerAdded: addedLedger.length,
     quickLedgerAdded: addedQuickLedger.length,
+    stockTradesAdded,
   };
 }

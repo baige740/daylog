@@ -905,7 +905,7 @@ function renderLedgerPage(root, options = {}) {
   root.innerHTML = `<div class="life-page ledger-page">
     <header class="life-page-head ledger-page-head">
       <div><p class="life-eyebrow">MONEY &amp; RHYTHM</p><h1>生活账本</h1><p>每一笔收入和支出，都留下时间、来源与用途。</p></div>
-      <div class="ledger-head-actions"><button type="button" class="life-soft-button" data-export-ledger="month">${icon("download")}导出本月</button><button type="button" class="life-soft-button" data-export-ledger="all">导出全部</button></div>
+      <div class="ledger-head-actions"><button type="button" class="life-soft-button ledger-stock-link" data-view="portfolio">${icon("activity")}股票持仓</button><button type="button" class="life-soft-button" data-export-ledger="month">${icon("download")}导出本月</button><button type="button" class="life-soft-button" data-export-ledger="all">导出全部</button></div>
     </header>
 
     <section class="ledger-monthbar">

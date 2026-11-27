@@ -1,6 +1,6 @@
 import { entries, storedDraftEntries } from "./journal.js";
 import { exportMediaBundle } from "./media.js";
-import { getLifeBackupData, lifeCounts } from "./life-data.js";
+import { getLifeBackupData, LIFE_STORAGE_KEYS, lifeCounts } from "./life-data.js";
 
 const SETTINGS_KEY = "daylog:cloud:v1";
 const CLOUD_VERSION = 1;
@@ -52,6 +52,7 @@ function writeSettings(value) {
     weightCount: Number(value.weightCount) || 0,
     ledgerCount: Number(value.ledgerCount) || 0,
     quickLedgerCount: Number(value.quickLedgerCount) || 0,
+    stockTradeCount: Number(value.stockTradeCount) || 0,
   };
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(config));
   return config;
@@ -297,6 +298,7 @@ export function getJournalCloudState() {
     weightCount: config.weightCount,
     ledgerCount: config.ledgerCount,
     quickLedgerCount: config.quickLedgerCount,
+    stockTradeCount: config.stockTradeCount,
   };
 }
 
@@ -362,6 +364,7 @@ export async function uploadJournalBackup({ force = false } = {}) {
       weightCount: counts.weightCount,
       ledgerCount: counts.ledgerCount,
       quickLedgerCount: counts.quickLedgerCount,
+      stockTradeCount: counts.stockTradeCount,
     });
     emit({
       phase: "success",
@@ -434,10 +437,7 @@ function localFingerprint() {
       key?.startsWith("daylog:entry:")
       || key?.startsWith("daylog:draft:")
       || key?.startsWith("daylog:article-draft:")
-      || key === "daylog:life:profile:v1"
-      || key === "daylog:life:weights:v1"
-      || key === "daylog:life:ledger:v1"
-      || key === "daylog:life:quick-ledger:v1"
+      || LIFE_STORAGE_KEYS.includes(key)
     ) {
       keys.push(key);
     }
