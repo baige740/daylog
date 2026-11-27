@@ -1,4 +1,5 @@
 import { icon } from "./icons.js";
+import { ledgerCategories, ledgerCategoryAliases, ledgerCategoryGroup } from "./ledger-categories.js";
 import {
   deleteLedger,
   deleteQuickLedger,
@@ -13,8 +14,6 @@ import {
   saveWeight,
 } from "./life-data.js";
 
-const EXPENSE_CATEGORIES = ["餐饮", "交通", "购物", "居住", "医疗", "学习", "娱乐", "人情", "旅行", "其他支出"];
-const INCOME_CATEGORIES = ["工资", "奖金", "投资", "兼职", "退款", "红包", "其他收入"];
 const ACCOUNTS = ["微信", "支付宝", "银行卡", "现金", "证券账户", "其他"];
 const WEIGHT_RANGES = [
   [7, "近 7 天"],
@@ -29,6 +28,7 @@ let ledgerState = {
   month: monthStart(new Date()),
   query: "",
   type: "",
+  group: "",
 };
 
 function escapeHTML(value) {
@@ -424,11 +424,13 @@ function renderWellnessPage(root, options = {}) {
   }
 }
 
-function ledgerRecordMatches(record, query, type) {
+function ledgerRecordMatches(record, { query, type, group }) {
   if (type && record.type !== type) return false;
+  if (group && ledgerCategoryGroup(record.type, record.category) !== group) return false;
   if (!query) return true;
   const haystack = [
     record.category,
+    ledgerCategoryGroup(record.type, record.category),
     record.account,
     record.payee,
     record.note,
@@ -539,9 +541,7 @@ function fillQuickLedgerForm(root, record = null) {
     button.setAttribute("aria-pressed", String(button.dataset.quickType === type));
   });
   const category = form.querySelector('[name="category"]');
-  category.innerHTML = categoryOptionsMarkup(type);
-  const categories = type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
-  category.value = categories.includes(record?.category) ? record.category : categories[0];
+  setCategoryOptions(category, type, record?.category);
   form.querySelector('[name="account"]').value = record?.account || "微信";
   form.querySelector(".quick-ledger-form-title").textContent = record ? "编辑快捷账目" : "新建快捷账目";
   form.querySelector('[type="submit"]').innerHTML = `${icon("check")}${record ? "保存修改" : "保存快捷"}`;
@@ -572,13 +572,13 @@ function bindQuickLedgerPanel(root, options) {
   });
   form.querySelectorAll("[data-quick-type]").forEach(button => {
     button.addEventListener("click", () => {
+      if (button.getAttribute("aria-pressed") === "true") return;
       const type = button.dataset.quickType;
       form.querySelectorAll("[data-quick-type]").forEach(item => {
         item.setAttribute("aria-pressed", String(item === button));
       });
       const category = form.querySelector('[name="category"]');
-      category.innerHTML = categoryOptionsMarkup(type);
-      category.value = (type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES)[0];
+      setCategoryOptions(category, type);
     });
   });
   form.addEventListener("submit", event => {
@@ -662,26 +662,116 @@ function ledgerSummary(items) {
 function categoryBreakdown(items) {
   const totals = new Map();
   for (const item of items) {
-    totals.set(item.category, (totals.get(item.category) || 0) + item.amount);
+    const group = ledgerCategoryGroup(item.type, item.category);
+    totals.set(group, (totals.get(group) || 0) + item.amount);
   }
   const maximum = Math.max(1, ...totals.values());
   return [...totals.entries()]
     .sort((left, right) => right[1] - left[1])
-    .slice(0, 8)
     .map(([category, total]) => ({ category, total, ratio: total / maximum }));
 }
 
-function categoryOptionsMarkup(type) {
-  const values = type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
-  return values.map(value => `<option value="${value}">${value}</option>`).join("");
+function categoryOptionsMarkup(type, selected) {
+  const groups = ledgerCategories[type];
+  const known = Object.entries(groups).some(([group, items]) =>
+    group === selected || items.includes(selected)
+  );
+  const oldCategory = selected && !known
+    ? `<option value="${escapeHTML(selected)}">${escapeHTML(selected)}</option>`
+    : "";
+  const grouped = Object.entries(groups).map(([group, items]) =>
+    `<optgroup label="${group}">${[group, ...items].map(item =>
+      `<option value="${item}">${item}</option>`
+    ).join("")}</optgroup>`
+  ).join("");
+  return oldCategory + grouped;
+}
+
+function setCategoryOptions(select, type, selected = Object.keys(ledgerCategories[type])[0]) {
+  select.innerHTML = categoryOptionsMarkup(type, selected);
+  select.value = selected;
+}
+
+function ledgerCategoryField(kind) {
+  return `<div class="life-field ledger-category-field">
+    <div><label for="${kind}-category">分类</label>
+      <button type="button" class="ledger-project-trigger" aria-haspopup="dialog" data-ledger-projects>常用项目</button>
+    </div>
+    <select name="category" id="${kind}-category">${categoryOptionsMarkup("expense")}</select>
+  </div>`;
+}
+
+function bindLedgerProjects(root) {
+  const picker = root.querySelector("#ledger-project-picker");
+  const search = picker.querySelector("#ledger-project-search");
+  const groupSelect = picker.querySelector("#ledger-project-group");
+  const results = picker.querySelector("#ledger-project-results");
+  const types = picker.querySelectorAll("[data-project-type]");
+  let form, originalType, type;
+
+  function renderProjects() {
+    const query = search.value.trim().toLocaleLowerCase();
+    const sections = Object.entries(ledgerCategories[type]).flatMap(([group, items]) => {
+      if (groupSelect.value && groupSelect.value !== group) return [];
+      const matching = items.filter(item =>
+        [group, item, ledgerCategoryAliases[item] || ""].join(" ").toLocaleLowerCase().includes(query)
+      );
+      if (!matching.length) return [];
+      return [`<section class="ledger-project-group"><h3>${group}</h3><div>
+        ${matching.map(item => `<button type="button" data-project-category="${item}">${item}</button>`).join("")}
+      </div></section>`];
+    });
+    results.innerHTML = sections.join("") || '<p>没找到项目，试试更短的关键词或切换场景。</p>';
+    results.scrollTop = 0;
+  }
+
+  function setType(next) {
+    type = next;
+    types.forEach(button =>
+      button.setAttribute("aria-pressed", String(button.dataset.projectType === type))
+    );
+    groupSelect.innerHTML = '<option value="">全部场景</option>' +
+      Object.keys(ledgerCategories[type]).map(group => `<option>${group}</option>`).join("");
+    renderProjects();
+  }
+
+  root.querySelectorAll("[data-ledger-projects]").forEach(button => {
+    button.onclick = () => {
+      form = button.closest("form");
+      const buttons = form.querySelectorAll("[data-ledger-type], [data-quick-type]");
+      const active = Array.from(buttons).find(item => item.getAttribute("aria-pressed") === "true");
+      originalType = active.dataset.ledgerType || active.dataset.quickType;
+      search.value = "";
+      setType(originalType);
+      picker.showModal();
+    };
+  });
+  types.forEach(button => button.onclick = () => setType(button.dataset.projectType));
+  search.oninput = renderProjects;
+  groupSelect.onchange = renderProjects;
+  picker.querySelector("[data-close-projects]").onclick = () => picker.close();
+  results.onclick = event => {
+    const button = event.target.closest("[data-project-category]");
+    if (!button) return;
+    const category = button.dataset.projectCategory;
+    if (type !== originalType) {
+      form.querySelector(`[data-ledger-type="${type}"], [data-quick-type="${type}"]`).click();
+    }
+    form.elements.category.value = category;
+    const name = form.elements.namedItem("name");
+    if (name && !name.value.trim()) name.value = category;
+    picker.close();
+    const amount = form.elements.amount;
+    (amount.value ? form.elements.category : amount).focus();
+  };
 }
 
 function ledgerRowsMarkup(items) {
   if (!items.length) {
     return `<div class="ledger-empty">
       <span>${icon("wallet")}</span>
-      <b>${ledgerState.query || ledgerState.type ? "没有符合条件的账目" : "这个月还没有记账"}</b>
-      <p>${ledgerState.query || ledgerState.type ? "换个关键词或筛选条件试试。" : "记录一笔收支，月度汇总和分类统计会自动生成。"}</p>
+      <b>${ledgerState.query || ledgerState.type || ledgerState.group ? "没有符合条件的账目" : "这个月还没有记账"}</b>
+      <p>${ledgerState.query || ledgerState.type || ledgerState.group ? "换个关键词或筛选条件试试。" : "记录一笔收支，月度汇总和分类统计会自动生成。"}</p>
     </div>`;
   }
   return items.map(item => `<article class="ledger-row" data-ledger-id="${item.id}">
@@ -698,7 +788,7 @@ function ledgerRowsMarkup(items) {
 
 function updateLedgerRows(root) {
   const all = listLedger().filter(item => sameMonth(item.at, ledgerState.month));
-  const filtered = all.filter(item => ledgerRecordMatches(item, ledgerState.query, ledgerState.type));
+  const filtered = all.filter(item => ledgerRecordMatches(item, ledgerState));
   const target = root.querySelector("#ledger-rows");
   if (target) target.innerHTML = ledgerRowsMarkup(filtered);
   const count = root.querySelector("#ledger-filter-count");
@@ -731,11 +821,7 @@ function fillLedgerForm(root, record) {
   form.querySelectorAll("[data-ledger-type]").forEach(button => {
     button.setAttribute("aria-pressed", String(button.dataset.ledgerType === type));
   });
-  form.querySelector('[name="category"]').innerHTML = categoryOptionsMarkup(type);
-  const categories = type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
-  form.querySelector('[name="category"]').value = categories.includes(data?.category)
-    ? data.category
-    : categories[0];
+  setCategoryOptions(form.elements.category, type, data?.category);
   form.classList.toggle("is-editing", Boolean(data));
   form.querySelector(".ledger-form-title").textContent = data ? "编辑账目" : "记一笔";
   form.querySelector('[type="submit"]').innerHTML = data
@@ -808,9 +894,13 @@ function renderLedgerPage(root, options = {}) {
   const monthItems = allItems.filter(item => sameMonth(item.at, ledgerState.month));
   const summary = ledgerSummary(monthItems);
   summary.balance = summary.income - summary.expenses;
-  const filtered = monthItems.filter(item =>
-    ledgerRecordMatches(item, ledgerState.query, ledgerState.type),
-  );
+
+  const usedGroups = [...new Set(allItems.map(item => ledgerCategoryGroup(item.type, item.category)))];
+  if (!usedGroups.includes(ledgerState.group)) ledgerState.group = "";
+  const filtered = monthItems.filter(item => ledgerRecordMatches(item, ledgerState));
+  const groupOptions = usedGroups.sort((a, b) => a.localeCompare(b, "zh-CN")).map(group =>
+    `<option value="${escapeHTML(group)}"${group === ledgerState.group ? " selected" : ""}>${escapeHTML(group)}</option>`
+  ).join("");
 
   root.innerHTML = `<div class="life-page ledger-page">
     <header class="life-page-head ledger-page-head">
@@ -859,7 +949,7 @@ function renderLedgerPage(root, options = {}) {
               <button type="button" data-quick-type="income" aria-pressed="false">收入</button>
             </div>
           </div>
-          <label class="life-field"><span>分类</span><select name="category">${categoryOptionsMarkup("expense")}</select></label>
+          ${ledgerCategoryField("quick-ledger")}
           <label class="life-field"><span>账户或支付方式</span><select name="account">${ACCOUNTS.map(value => `<option value="${value}">${value}</option>`).join("")}</select></label>
           <label class="life-field"><span>商户或对方 <small>选填</small></span><input name="payee" maxlength="80" placeholder="例如：地铁"></label>
           <label class="life-field is-wide"><span>备注 <small>选填</small></span><input name="note" maxlength="500" placeholder="例如：工作日通勤"></label>
@@ -883,7 +973,7 @@ function renderLedgerPage(root, options = {}) {
         <label class="ledger-amount-field"><span>金额</span><div><b>¥</b><input name="amount" type="number" min="0.01" max="1000000000000" step="0.01" inputmode="decimal" required placeholder="0.00"></div></label>
         <div class="ledger-form-grid">
           <label class="life-field"><span>发生时间</span><input name="at" type="datetime-local" step="1" required value="${escapeHTML(localDateTimeValue())}"></label>
-          <label class="life-field"><span>分类</span><select name="category">${categoryOptionsMarkup("expense")}</select></label>
+          ${ledgerCategoryField("ledger")}
           <label class="life-field"><span>账户或支付方式</span><select name="account">${ACCOUNTS.map(value => `<option value="${value}">${value}</option>`).join("")}</select></label>
           <label class="life-field"><span>商户或对方</span><input name="payee" maxlength="80" placeholder="例如：早餐店、公司"></label>
         </div>
@@ -899,26 +989,41 @@ function renderLedgerPage(root, options = {}) {
     </div>
 
     <section class="life-panel ledger-list-panel">
-      <header class="life-panel-head ledger-list-head"><div><p>TRANSACTIONS</p><h2>本月明细 <span id="ledger-filter-count">${filtered.length === monthItems.length ? `${monthItems.length} 笔` : `${filtered.length} / ${monthItems.length} 笔`}</span></h2></div><div class="ledger-filters"><label><span class="sr-only">搜索账目</span><input type="search" id="ledger-search" value="${escapeHTML(ledgerState.query)}" placeholder="搜索商户、备注、标签">${icon("search")}</label><select id="ledger-type-filter" aria-label="筛选收支类型"><option value="">全部收支</option><option value="expense"${ledgerState.type === "expense" ? " selected" : ""}>只看支出</option><option value="income"${ledgerState.type === "income" ? " selected" : ""}>只看收入</option></select></div></header>
+      <header class="life-panel-head ledger-list-head"><div><p>TRANSACTIONS</p><h2>本月明细 <span id="ledger-filter-count">${filtered.length === monthItems.length ? `${monthItems.length} 笔` : `${filtered.length} / ${monthItems.length} 笔`}</span></h2></div><div class="ledger-filters"><label><span class="sr-only">搜索账目</span><input type="search" id="ledger-search" value="${escapeHTML(ledgerState.query)}" placeholder="搜索项目、商户或备注">${icon("search")}</label><select id="ledger-type-filter" aria-label="筛选收支类型"><option value="">全部收支</option><option value="expense"${ledgerState.type === "expense" ? " selected" : ""}>只看支出</option><option value="income"${ledgerState.type === "income" ? " selected" : ""}>只看收入</option></select><select id="ledger-group-filter" aria-label="筛选账目分类"><option value="">全部分类</option>${groupOptions}</select></div></header>
       <div id="ledger-rows">${ledgerRowsMarkup(filtered)}</div>
     </section>
+    <dialog id="ledger-project-picker" aria-labelledby="ledger-project-title">
+      <header class="dialog-head"><h2 id="ledger-project-title">常用记账项目</h2>
+        <button type="button" class="icon-btn" aria-label="关闭常用项目" data-close-projects>${icon("x")}</button>
+      </header>
+      <div class="ledger-project-types" role="group" aria-label="项目收支类型">
+        <button type="button" data-project-type="expense" aria-pressed="true">支出</button>
+        <button type="button" data-project-type="income" aria-pressed="false">收入</button>
+      </div>
+      <div class="ledger-project-controls">
+        <input type="search" id="ledger-project-search" aria-label="搜索常用项目" placeholder="搜索早饭、通勤…" maxlength="60">
+        <select id="ledger-project-group" aria-label="按生活场景筛选"></select>
+      </div>
+      <div id="ledger-project-results"></div>
+    </dialog>
   </div>`;
 
   const notify = message => {
     if (typeof options.notify === "function") options.notify(message);
   };
   bindQuickLedgerPanel(root, options);
+  bindLedgerProjects(root);
   const form = root.querySelector("#ledger-form");
 
   form.querySelectorAll("[data-ledger-type]").forEach(button => {
     button.addEventListener("click", () => {
+      if (button.getAttribute("aria-pressed") === "true") return;
       const type = button.dataset.ledgerType;
       form.querySelectorAll("[data-ledger-type]").forEach(item => {
         item.setAttribute("aria-pressed", String(item === button));
       });
       const category = form.querySelector('[name="category"]');
-      category.innerHTML = categoryOptionsMarkup(type);
-      category.value = (type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES)[0];
+      setCategoryOptions(category, type);
     });
   });
 
@@ -969,6 +1074,11 @@ function renderLedgerPage(root, options = {}) {
     updateLedgerRows(root);
   });
 
+  root.querySelector("#ledger-group-filter").addEventListener("change", event => {
+    ledgerState.group = event.currentTarget.value;
+    updateLedgerRows(root);
+  });
+
   root.querySelectorAll("[data-export-ledger]").forEach(button => {
     button.addEventListener("click", () => {
       const all = listLedger();
@@ -999,6 +1109,6 @@ export function stopWellnessTicker() {
 export { renderWellnessPage, renderLedgerPage };
 
 export function focusLedgerRecord(root,item,options={}){
-  ledgerState.month=monthStart(new Date(item.at));ledgerState.query='';ledgerState.type='';renderLedgerPage(root,options);
+  ledgerState.month=monthStart(new Date(item.at));ledgerState.query='';ledgerState.type='';ledgerState.group='';renderLedgerPage(root,options);
   requestAnimationFrame(()=>root.querySelector('[data-ledger-id="'+CSS.escape(item.id)+'"]')?.scrollIntoView({block:'center'}));
 }

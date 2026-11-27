@@ -2027,3 +2027,133 @@
     transition: none;
   }
 }
+.ledger-category-field > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.ledger-project-trigger {
+  min-height: 30px;
+  margin-block: -5px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  background: var(--life-mint);
+  color: var(--life-green);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+#ledger-project-picker {
+  width: min(540px, calc(100% - 24px));
+  max-height: 85dvh;
+  padding: 18px;
+}
+
+#ledger-project-picker .dialog-head {
+  margin-bottom: 12px;
+}
+
+#ledger-project-picker .dialog-head button {
+  flex: none;
+  width: 44px;
+  height: 44px;
+}
+
+.ledger-project-types {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.ledger-project-types button {
+  min-height: 40px;
+  min-width: 68px;
+  border: 1px solid var(--life-line);
+  border-radius: 8px;
+}
+
+.ledger-project-types button[aria-pressed="true"] {
+  border-color: var(--life-green);
+  background: var(--life-green);
+  color: #fff;
+}
+
+.ledger-project-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.ledger-project-controls input,
+.ledger-project-controls select {
+  min-width: 0;
+  min-height: 42px;
+  padding: 7px 9px;
+  border: 1px solid var(--life-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--life-ink);
+  font-size: 16px;
+}
+
+#ledger-project-results {
+  max-height: 48dvh;
+  margin-top: 12px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+#ledger-project-results > p {
+  color: var(--life-muted);
+  font-size: 14px;
+}
+
+.ledger-project-group {
+  padding: 10px 3px 12px;
+  border-top: 1px solid var(--life-line);
+}
+
+.ledger-project-group h3 {
+  margin: 0 0 7px;
+  color: var(--life-green);
+  font: 650 16px/1.4 "LXGW WenKai Lite", "Songti SC", serif;
+}
+
+.ledger-project-group > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ledger-project-group button {
+  min-height: 42px;
+  padding: 5px 10px;
+  border: 1px solid var(--life-line);
+  border-radius: 8px;
+  background: #f8fbf7;
+  color: var(--life-ink);
+  font-size: 14px;
+}
+
+.ledger-project-group button:hover {
+  background: var(--life-mint);
+}
+
+@media (max-width: 640px) {
+  .ledger-filters {
+    flex-wrap: wrap;
+  }
+
+  .ledger-filters label {
+    flex: 1 0 100%;
+    min-width: 0;
+  }
+
+  .ledger-filters select {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
