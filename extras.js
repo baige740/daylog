@@ -377,7 +377,10 @@ window.addEventListener("resize", () => {
 document.addEventListener("click", event => {
   const details = document.querySelector(".style-details[open]");
   if (!details) return;
-  if (event.target === details || !details.contains(event.target)) {
+  if (event.target.closest("[data-style-done]")) {
+    details.open = false;
+    details.querySelector("summary")?.focus({ preventScroll: true });
+  } else if (event.target === details || !details.contains(event.target)) {
     details.open = false;
   }
 });

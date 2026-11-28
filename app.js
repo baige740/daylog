@@ -27,6 +27,9 @@ const feelings=['低落','疲惫','平静','愉快','开心'];
 const colors=[['#e7e9f2','#8991ad'],['#e7eef0','#839da4'],['#e9eddb','#93a278'],['#f7e7b0','#ba963c'],['#fbdfae','#bc8b3c']];
 const quotes=[['知之者不如好之者，好之者不如乐之者。','孔子'],['不积跬步，无以至千里。','荀子'],['知人者智，自知者明。','老子'],['吾日三省吾身。','曾子'],['学而不思则罔，思而不学则殆。','孔子']];
 const lightStyleBase={...DEFAULT_STYLE,fontSize:17,lineHeight:1.9,paragraphGap:.82};
+const mobileSidebarMedia=matchMedia('(max-width: 820px)');
+const sidebar=$('#sidebar'),menu=$('#menu'),veil=$('#veil');
+let activeBook='';
 let view='home',dayFilter='',typeFilter='',query='',activeTab='note',smart=localStorage.getItem('daylog:smart')!=='off',month=new Date(),statsMonth=new Date(),records=[],toastTimer,activeDate=dateKey(new Date());
 let marketRefresh=null;
 let currentContext=null,currentMood=null,currentStyle=normalizeStyle(null,lightStyleBase),locationBusy=false;
@@ -48,8 +51,18 @@ function askConfirm(title,body,confirmLabel='确认删除'){
     $('#confirm-delete-action').onclick=()=>{settled=true;dialogCleanup=null;dialog.close();resolve(true)};
   });
 }
-function setMenu(open){document.body.classList.toggle('nav-open',open);$('#veil').hidden=!open;$('#menu').setAttribute('aria-expanded',open)}
-$('#menu').onclick=()=>setMenu(true);$('#veil').onclick=()=>setMenu(false);
+function setMenu(open){
+  const mobile=mobileSidebarMedia.matches;
+  const expanded=mobile&&open;
+  if(mobile&&!expanded&&sidebar.contains(document.activeElement))menu.focus({preventScroll:true});
+  document.body.classList.toggle('nav-open',expanded);
+  sidebar.inert=mobile&&!expanded;
+  veil.hidden=!expanded;
+  menu.setAttribute('aria-expanded',String(expanded));
+  if(expanded)sidebar.querySelector('[aria-current="page"]')?.focus({preventScroll:true});
+}
+menu.onclick=()=>setMenu(true);
+veil.onclick=()=>setMenu(false);
 function headerDate(){
   const now=new Date(),parts=now.toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'}).replace('星期',' · 星期');
   $('#hero-date').innerHTML=icon('calendar')+esc(parts);
@@ -62,9 +75,14 @@ function renderNav(){
   }
   $('#mobile-nav').querySelectorAll('[data-view]').forEach(button=>button.classList.toggle('selected',button.dataset.view===(view==='portfolio'?'ledger':view)));
 }
-function navigate(next,date=''){
+function navigate(next,date='',{book='',recordHistory=true}={}){
+  next=Object.hasOwn(places,next)?next:'home';
+  book=next==='reading'&&books.some(item=>item.id===book)?book:'';
+  if(recordHistory&&(view!==next||dayFilter!==date||activeBook!==book)){
+    history.pushState({daylogRoute:{view:next,date,book}},'');
+  }
   stopWellnessTicker();
-  view=Object.hasOwn(places,next)?next:'home';query='';typeFilter='';dayFilter=date;setMenu(false);
+  view=next;query='';typeFilter='';dayFilter=date;activeBook=book;setMenu(false);
   const archiveView=!['home','stats','reading','wellness','ledger','portfolio','memories','inbox'].includes(view);
   $('#dashboard').hidden=view!=='home';
   $('#archive').hidden=!archiveView;
@@ -90,11 +108,30 @@ function navigate(next,date=''){
   if(view==='home')marketRefresh?.()
 }
 const books=[{id:'maoxuan',title:'毛泽东选集',sub:'学习版 · 229 篇 · 第一卷—第四卷',src:'maoxuan/index.html',mark:'毛',stateKey:'mx_study_v1',total:229}];
+function restoreRoute(state){
+  const route=state?.daylogRoute;
+  navigate(route?.view,route?.date,{book:route?.book,recordHistory:false});
+}
+window.addEventListener('popstate',event=>{
+  document.querySelectorAll('dialog[open]').forEach(panel=>panel.close());
+  restoreRoute(event.state);
+});
 function readBookState(key){try{return JSON.parse(localStorage.getItem(key))||{}}catch{return {}}}
 function renderReading(){
-  const shelf=$('#bookshelf');if(!shelf)return;
-  if($('#reader-wrap')&&!$('#reader-wrap').hidden)return;
-  shelf.hidden=false;
+  const shelf=$('#bookshelf'),wrap=$('#reader-wrap');
+  const book=books.find(item=>item.id===activeBook);
+  wrap.hidden=!book;
+  shelf.hidden=Boolean(book);
+  if(book){
+    $('#reader-title').textContent=book.title;
+    const frame=$('#reader-frame');
+    if(frame.dataset.book!==book.id){
+      // The top-level route represents the book in browser history.
+      frame.contentWindow.location.replace(new URL(book.src,document.baseURI).href);
+      frame.dataset.book=book.id;
+    }
+    return;
+  }
   const cards=books.map(b=>{
     const st=readBookState(b.stateKey);
     const readN=st.read?Object.keys(st.read).filter(k=>st.read[k]).length:0;
@@ -102,23 +139,9 @@ function renderReading(){
     return '<button class="book-card" type="button" data-book="'+b.id+'"><span class="book-cover" aria-hidden="true">'+esc(b.mark)+'</span><span class="book-info"><h3>'+esc(b.title)+'</h3><span class="book-sub">'+esc(b.sub)+'</span><span class="book-prog"><span class="bar"><i style="width:'+pct+'%"></i></span><span class="pct"><span>已读 '+readN+' / '+b.total+'</span><span>'+pct+'%</span></span></span></span></button>'
   }).join('');
   shelf.innerHTML='<div class="shelf-lead"><h1>阅读</h1><p>在日迹里读书：选中文字高亮或写批注，会自动收进「金句摘录」。</p></div><div class="shelf-grid">'+cards+'<div class="book-add">更多书目<br>后续加入</div></div>';
-  shelf.querySelectorAll('[data-book]').forEach(btn=>btn.onclick=()=>openBook(btn.dataset.book));
+  shelf.querySelectorAll('[data-book]').forEach(btn=>btn.onclick=()=>navigate('reading','',{book:btn.dataset.book}));
 }
-function openBook(id){
-  const b=books.find(x=>x.id===id);if(!b)return;
-  $('#bookshelf').hidden=true;
-  const wrap=$('#reader-wrap');wrap.hidden=false;
-  $('#reader-title').textContent=b.title;
-  const frame=$('#reader-frame');
-  if(frame.getAttribute('src')!==b.src)frame.setAttribute('src',b.src);
-}
-function backToShelf(){
-  const wrap=$('#reader-wrap');if(wrap)wrap.hidden=true;
-  const frame=$('#reader-frame');if(frame)frame.setAttribute('src','about:blank');
-  const shelf=$('#bookshelf');if(shelf)shelf.hidden=false;
-  renderReading();
-}
-if($('#reader-back'))$('#reader-back').onclick=backToShelf;
+$('#reader-back').onclick=()=>history.back();
 function renderCal(){
   const y=month.getFullYear(),m=month.getMonth(),offset=(new Date(y,m,1).getDay()+6)%7;
   let cells=['一','二','三','四','五','六','日'].map(v=>'<label>'+v+'</label>').join('')+'<span></span>'.repeat(offset);
@@ -707,18 +730,18 @@ document.addEventListener('click',e=>{
 document.addEventListener('keydown',e=>{if(e.isComposing)return;if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openSearch()}if((e.ctrlKey||e.metaKey)&&e.key==='Enter'&&document.activeElement===editor){e.preventDefault();save()}if(e.key==='Escape')setMenu(false)});
 window.addEventListener('storage',e=>{if(!e.key||e.key.startsWith('daylog:entry:'))renderRecords();else if(e.key.startsWith(articleDraftPrefix))renderArticleDrafts();else if(e.key?.startsWith('daylog:life:'))renderHomeLedgerQuick($('#home-ledger-quick'),{notify:toast,navigate})});
 function syncMobileSidebarCalendar(){
-  const sidebar=$('#sidebar'),nav=sidebar.querySelector(':scope > nav'),foot=$('#side-foot'),calendar=$('#calendar');
-  const mobile=matchMedia('(max-width: 820px)').matches;
+  const nav=sidebar.querySelector(':scope > nav'),foot=$('#side-foot'),calendar=$('#calendar');
+  const mobile=mobileSidebarMedia.matches;
   if(mobile&&calendar.parentElement!==nav)nav.append(calendar);
   else if(!mobile&&calendar.parentElement!==foot)foot.prepend(calendar);
+  setMenu(false);
 }
-const mobileSidebarMedia=matchMedia('(max-width: 820px)');
 mobileSidebarMedia.addEventListener?.('change',syncMobileSidebarCalendar);
 syncMobileSidebarCalendar();
 function changeDay(){if(activeDate!==dateKey(new Date())){headerDate();renderRecords()}}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){changeDay();if(view==='home')marketRefresh?.()}});setInterval(changeDay,30000);
 window.addEventListener('pageshow',()=>{if(view==='home')marketRefresh?.()});
-paintIcons();headerDate();renderButtons();const lastTab=localStorage.getItem('daylog:tab');selectTab(tabs.some(([t])=>t===lastTab)?lastTab:'note',false);navigate('home');startMarket(openDialog,toast).then(refresh=>{marketRefresh=refresh}).catch(()=>null);
+paintIcons();headerDate();renderButtons();const lastTab=localStorage.getItem('daylog:tab');selectTab(tabs.some(([t])=>t===lastTab)?lastTab:'note',false);restoreRoute(history.state);startMarket(openDialog,toast).then(refresh=>{marketRefresh=refresh}).catch(()=>null);
 $('#mobile-profile').onclick=openBackup;
 cleanupUnreferencedMedia(entries(),storedDrafts()).catch(()=>null);
 startJournalCloud();

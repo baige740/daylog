@@ -216,8 +216,9 @@ body{
 .ol-item.active{border-left-color:var(--accent); color:var(--accent); background:var(--accent-soft);}
 
 /* ---------- 划词工具条 ---------- */
-.sel-toolbar{position:absolute; z-index:80; background:var(--panel); border:1px solid var(--border);
-  border-radius:10px; box-shadow:var(--shadow); padding:5px; display:flex; gap:3px;}
+.sel-toolbar{position:fixed; z-index:80; background:var(--panel); border:1px solid var(--border);
+  border-radius:10px; box-shadow:var(--shadow); padding:5px; display:flex; flex-wrap:wrap; gap:3px;
+  width:max-content; max-width:calc(100% - 16px); user-select:none;}
 .sel-toolbar button{border:none; background:transparent; color:var(--text-soft); padding:6px 10px; border-radius:7px; cursor:pointer; font-size:13px;}
 .sel-toolbar button:hover{background:var(--panel-2); color:var(--accent);}
 

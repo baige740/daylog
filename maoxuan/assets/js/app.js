@@ -575,38 +575,62 @@
   /* ============ 划词工具条 ============ */
   function initSelection(){
     const body = $("#articleBody");
+    const reader = $("#reader");
     const tb = $("#selToolbar");
-    body.addEventListener("mouseup", ()=> setTimeout(showSelToolbar, 10));
-    body.addEventListener("keyup", ()=> setTimeout(showSelToolbar, 10));
-    document.addEventListener("mousedown", e=>{ if(!tb.contains(e.target)) {/* defer */} });
-    $("#reader").addEventListener("scroll", ()=> tb.classList.add("hidden"));
-    function showSelToolbar(){
-      const sel = window.getSelection();
-      if(!sel || sel.isCollapsed || !sel.toString().trim()){ tb.classList.add("hidden"); return; }
-      const range = sel.getRangeAt(0);
-      if(!body.contains(range.commonAncestorContainer)){ tb.classList.add("hidden"); return; }
-      const rect = range.getBoundingClientRect();
-      tb.classList.remove("hidden");
-      const tbRect = tb.getBoundingClientRect();
-      let top = rect.top - tbRect.height - 8 + window.scrollY;
-      let left = rect.left + rect.width/2 - tbRect.width/2 + window.scrollX;
-      tb.style.top = Math.max(60, top) + "px";
-      tb.style.left = Math.max(8, left) + "px";
+    const touch = window.matchMedia("(pointer: coarse)");
+    let frame = 0;
+    function scheduleToolbar(){
+      if(!frame) frame = requestAnimationFrame(showSelToolbar);
     }
+    function showSelToolbar(){
+      frame = 0;
+      const range = articleSelection();
+      if(!range){ tb.classList.add("hidden"); return; }
+      const rect = range.getBoundingClientRect();
+      const viewport = reader.getBoundingClientRect();
+      if(rect.bottom <= viewport.top || rect.top >= viewport.bottom){
+        tb.classList.add("hidden");
+        return;
+      }
+      tb.classList.remove("hidden");
+      const {width, height} = tb.getBoundingClientRect();
+      const gap = 8;
+      const minTop = viewport.top + gap;
+      const maxTop = Math.max(minTop, viewport.bottom - height - gap);
+      const above = rect.top - height - gap;
+      const below = rect.bottom + gap;
+      const preferredTop = touch.matches && below <= maxTop ? below
+        : above >= minTop ? above : below;
+      const center = rect.left + (rect.width - width)/2;
+      tb.style.top = Math.max(minTop, Math.min(preferredTop, maxTop)) + "px";
+      tb.style.left = Math.max(gap, Math.min(center, document.documentElement.clientWidth - width - gap)) + "px";
+    }
+    document.addEventListener("selectionchange", scheduleToolbar);
+    body.addEventListener("mouseup", scheduleToolbar);
+    body.addEventListener("keyup", scheduleToolbar);
+    body.addEventListener("touchend", scheduleToolbar, {passive:true});
+    reader.addEventListener("scroll", scheduleToolbar, {passive:true});
+    window.addEventListener("resize", scheduleToolbar);
+    tb.addEventListener("pointerdown", event=>{
+      if(event.target.closest("button")) event.preventDefault();
+    });
     $("#selHighlight").addEventListener("click", ()=> createHighlight(false));
     $("#selNote").addEventListener("click", ()=> createHighlight(true));
     $("#selCopy").addEventListener("click", ()=>{
-      const t = window.getSelection().toString();
+      const t = articleSelection()?.toString();
+      if(!t) return;
       navigator.clipboard && navigator.clipboard.writeText(t);
       toast("已复制");
     });
   }
-  function getSelectionText(){
+  function articleSelection(){
     const sel = window.getSelection();
-    return sel && !sel.isCollapsed ? sel.toString().trim() : "";
+    if(!sel || !sel.rangeCount || sel.isCollapsed || !sel.toString().trim()) return null;
+    const range = sel.getRangeAt(0);
+    return $("#articleBody").contains(range.commonAncestorContainer) ? range : null;
   }
   function createHighlight(withNote){
-    const text = getSelectionText();
+    const text = articleSelection()?.toString().trim();
     if(!text || !currentId) return;
     const hid = Date.now().toString(36) + Math.random().toString(36).slice(2,7);
     const h = { hid, text, note:"", ts:Date.now() };
