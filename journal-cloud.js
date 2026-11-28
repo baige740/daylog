@@ -52,6 +52,8 @@ function writeSettings(value) {
     weightCount: Number(value.weightCount) || 0,
     ledgerCount: Number(value.ledgerCount) || 0,
     quickLedgerCount: Number(value.quickLedgerCount) || 0,
+    peopleCount: Number(value.peopleCount) || 0,
+    periodCount: Number(value.periodCount) || 0,
     stockTradeCount: Number(value.stockTradeCount) || 0,
   };
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(config));
@@ -298,6 +300,8 @@ export function getJournalCloudState() {
     weightCount: config.weightCount,
     ledgerCount: config.ledgerCount,
     quickLedgerCount: config.quickLedgerCount,
+    peopleCount: config.peopleCount,
+    periodCount: config.periodCount,
     stockTradeCount: config.stockTradeCount,
   };
 }
@@ -364,6 +368,8 @@ export async function uploadJournalBackup({ force = false } = {}) {
       weightCount: counts.weightCount,
       ledgerCount: counts.ledgerCount,
       quickLedgerCount: counts.quickLedgerCount,
+      peopleCount: counts.peopleCount,
+      periodCount: counts.periodCount,
       stockTradeCount: counts.stockTradeCount,
     });
     emit({

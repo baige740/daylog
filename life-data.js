@@ -5,6 +5,9 @@ export const LIFE_WEIGHTS_KEY = "daylog:life:weights:v1";
 export const LIFE_WEIGHT_UNIT_KEY = "daylog:life:weight-unit:v1";
 export const LIFE_LEDGER_KEY = "daylog:life:ledger:v1";
 export const LIFE_QUICK_LEDGER_KEY = "daylog:life:quick-ledger:v1";
+export const LIFE_PEOPLE_KEY = "daylog:life:people:v1";
+export const LIFE_PERIODS_KEY = "daylog:life:periods:v1";
+export const LIFE_PERIOD_SETTINGS_KEY = "daylog:life:period-settings:v1";
 
 export const LIFE_STORAGE_KEYS = [
   LIFE_PROFILE_KEY,
@@ -12,13 +15,19 @@ export const LIFE_STORAGE_KEYS = [
   LIFE_WEIGHT_UNIT_KEY,
   LIFE_LEDGER_KEY,
   LIFE_QUICK_LEDGER_KEY,
+  LIFE_PEOPLE_KEY,
+  LIFE_PERIODS_KEY,
+  LIFE_PERIOD_SETTINGS_KEY,
   STOCK_STORAGE_KEY,
 ];
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 const LEDGER_TYPES = new Set(["income", "expense"]);
 const WEIGHT_UNITS = new Set(["kg", "jin"]);
+const PERIOD_FLOWS = new Set(["light", "medium", "heavy"]);
 const MAX_QUICK_LEDGER = 20;
+const MAX_PEOPLE = 50;
+const MAX_ANNIVERSARIES = 12;
 const LUNAR_MONTH_NAMES = ["", "正月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "腊月"];
 const LUNAR_DAY_NAMES = ["", "初一", "初二", "初三", "初四", "初五", "初六", "初七", "初八", "初九", "初十", "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十", "廿一", "廿二", "廿三", "廿四", "廿五", "廿六", "廿七", "廿八", "廿九", "三十"];
 const LUNAR_MONTH_NUMBERS = new Map([
@@ -110,6 +119,23 @@ function normalizeLunarBirth(value) {
     throw new Error("请选择有效的农历出生年月日");
   }
   return { year, month, day, isLeap };
+}
+
+function normalizeLunarDate(value) {
+  const month = Number(value?.month);
+  const day = Number(value?.day);
+  const isLeap = Boolean(value?.isLeap);
+  if (
+    !Number.isInteger(month)
+    || month < 1
+    || month > 12
+    || !Number.isInteger(day)
+    || day < 1
+    || day > 30
+  ) {
+    throw new Error("请选择有效的农历月和日");
+  }
+  return { month, day, isLeap };
 }
 
 export function lunarToSolar(yearValue, monthValue, dayValue, isLeapValue = false) {
@@ -222,6 +248,116 @@ function normalizeWeight(value) {
     note: cleanText(value.note, 300),
     createdAt: canonicalDate(value.createdAt) || at,
     updatedAt: canonicalDate(value.updatedAt) || canonicalDate(value.createdAt) || at,
+  };
+}
+
+function normalizeReminderDays(value, fallback = 7) {
+  const numeric = Math.round(Number(value));
+  return Number.isFinite(numeric) ? Math.min(30, Math.max(0, numeric)) : fallback;
+}
+
+function normalizeAnniversary(value) {
+  if (!value || typeof value !== "object" || !ID_PATTERN.test(String(value.id || ""))) {
+    throw new Error("纪念日 ID 无效");
+  }
+  const title = cleanText(value.title, 40);
+  if (!title) throw new Error("请填写纪念日名称");
+  const calendar = value.calendar === "lunar" ? "lunar" : "solar";
+  const solarAt = calendar === "solar" ? canonicalDate(value.solarAt) : "";
+  const lunarDate = calendar === "lunar"
+    ? (() => {
+        try {
+          return normalizeLunarDate(value.lunarDate);
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+  if ((calendar === "solar" && !solarAt) || (calendar === "lunar" && !lunarDate)) {
+    throw new Error("请选择有效的纪念日日期");
+  }
+  return {
+    id: String(value.id),
+    title,
+    calendar,
+    solarAt,
+    lunarDate,
+    reminderDays: normalizeReminderDays(value.reminderDays, 7),
+    note: cleanText(value.note, 300),
+    createdAt: canonicalDate(value.createdAt) || new Date().toISOString(),
+    updatedAt: canonicalDate(value.updatedAt) || canonicalDate(value.createdAt) || new Date().toISOString(),
+  };
+}
+
+function normalizePerson(value) {
+  if (!value || typeof value !== "object" || !ID_PATTERN.test(String(value.id || ""))) {
+    throw new Error("重要人物 ID 无效");
+  }
+  const name = cleanText(value.name, 40);
+  if (!name) throw new Error("请填写姓名或称呼");
+  const relation = cleanText(value.relation, 20) || "其他";
+  const birthCalendar = value.birthCalendar === "lunar" ? "lunar" : "solar";
+  const lunarBirth = birthCalendar === "lunar"
+    ? (() => {
+        try {
+          return normalizeLunarBirth(value.lunarBirth);
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+  if (birthCalendar === "lunar" && !lunarBirth) {
+    throw new Error("请选择有效的农历出生年月日");
+  }
+  const birthAt = birthCalendar === "lunar"
+    ? lunarToSolar(lunarBirth.year, lunarBirth.month, lunarBirth.day, lunarBirth.isLeap)?.toISOString() || ""
+    : canonicalDate(value.birthAt);
+  if (!birthAt) throw new Error("请选择有效的出生日期");
+  const anniversaries = Array.isArray(value.anniversaries)
+    ? value.anniversaries.map(normalizeAnniversary).slice(0, MAX_ANNIVERSARIES)
+    : [];
+  return {
+    id: String(value.id),
+    name,
+    relation,
+    birthCalendar,
+    birthAt,
+    lunarBirth,
+    birthdayReminderDays: normalizeReminderDays(value.birthdayReminderDays, 7),
+    anniversaries,
+    note: cleanText(value.note, 500),
+    createdAt: canonicalDate(value.createdAt) || new Date().toISOString(),
+    updatedAt: canonicalDate(value.updatedAt) || canonicalDate(value.createdAt) || new Date().toISOString(),
+  };
+}
+
+function normalizePeriod(value) {
+  if (!value || typeof value !== "object" || !ID_PATTERN.test(String(value.id || ""))) {
+    throw new Error("生理期记录 ID 无效");
+  }
+  const startAt = canonicalDate(value.startAt);
+  const endAt = value.endAt ? canonicalDate(value.endAt) : "";
+  if (!startAt || (value.endAt && !endAt)) {
+    throw new Error("请选择有效的生理期日期");
+  }
+  if (endAt && new Date(endAt) < new Date(startAt)) {
+    throw new Error("结束日期不能早于开始日期");
+  }
+  return {
+    id: String(value.id),
+    startAt,
+    endAt,
+    flow: PERIOD_FLOWS.has(value.flow) ? value.flow : "medium",
+    symptoms: normalizeTags(value.symptoms).slice(0, 12),
+    note: cleanText(value.note, 500),
+    createdAt: canonicalDate(value.createdAt) || startAt,
+    updatedAt: canonicalDate(value.updatedAt) || canonicalDate(value.createdAt) || startAt,
+  };
+}
+
+function normalizePeriodSettings(value) {
+  return {
+    reminderDays: normalizeReminderDays(value?.reminderDays, 3),
   };
 }
 
@@ -463,13 +599,170 @@ export function deleteQuickLedger(id) {
   writeArray(LIFE_QUICK_LEDGER_KEY, next);
 }
 
+export function listPeople() {
+  return readArray(LIFE_PEOPLE_KEY)
+    .map(value => {
+      try {
+        return normalizePerson(value);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
+}
+
+export function savePerson(input) {
+  const now = new Date().toISOString();
+  const items = listPeople();
+  const existing = input?.id ? items.find(item => item.id === input.id) : null;
+  if (!existing && items.length >= MAX_PEOPLE) {
+    throw new Error(`最多保存 ${MAX_PEOPLE} 位重要人物`);
+  }
+  let birthAt = input?.birthAt;
+  if (input?.birthCalendar === "lunar") {
+    const lunarBirth = normalizeLunarBirth(input?.lunarBirth);
+    const solarBirth = lunarToSolar(
+      lunarBirth.year,
+      lunarBirth.month,
+      lunarBirth.day,
+      lunarBirth.isLeap,
+    );
+    if (!solarBirth) {
+      throw new Error(lunarBirth.isLeap
+        ? "这一农历年份没有该闰月，请核对月份"
+        : "请选择有效的农历出生年月日");
+    }
+    birthAt = solarBirth.toISOString();
+  }
+  const person = normalizePerson({
+    id: existing?.id || identifier("person"),
+    name: input?.name,
+    relation: input?.relation,
+    birthCalendar: input?.birthCalendar,
+    birthAt,
+    lunarBirth: input?.lunarBirth,
+    birthdayReminderDays: input?.birthdayReminderDays,
+    anniversaries: existing?.anniversaries || [],
+    note: input?.note,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  });
+  if (new Date(person.birthAt) > new Date()) {
+    throw new Error("出生日期不能晚于今天");
+  }
+  const next = items.filter(item => item.id !== person.id);
+  next.push(person);
+  writeArray(LIFE_PEOPLE_KEY, next);
+  return person;
+}
+
+export function deletePerson(id) {
+  writeArray(LIFE_PEOPLE_KEY, listPeople().filter(item => item.id !== id));
+}
+
+export function saveAnniversary(personId, input) {
+  const people = listPeople();
+  const person = people.find(item => item.id === personId);
+  if (!person) throw new Error("没有找到这位重要人物");
+  const existing = input?.id
+    ? person.anniversaries.find(item => item.id === input.id)
+    : null;
+  if (!existing && person.anniversaries.length >= MAX_ANNIVERSARIES) {
+    throw new Error(`每个人最多保存 ${MAX_ANNIVERSARIES} 个纪念日`);
+  }
+  const now = new Date().toISOString();
+  const anniversary = normalizeAnniversary({
+    id: existing?.id || identifier("anniversary"),
+    title: input?.title,
+    calendar: input?.calendar,
+    solarAt: input?.solarAt,
+    lunarDate: input?.lunarDate,
+    reminderDays: input?.reminderDays,
+    note: input?.note,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  });
+  const anniversaries = person.anniversaries.filter(item => item.id !== anniversary.id);
+  anniversaries.push(anniversary);
+  writeArray(LIFE_PEOPLE_KEY, people.map(item => item.id === person.id
+    ? { ...person, anniversaries, updatedAt: now }
+    : item));
+  return anniversary;
+}
+
+export function deleteAnniversary(personId, anniversaryId) {
+  const now = new Date().toISOString();
+  writeArray(
+    LIFE_PEOPLE_KEY,
+    listPeople().map(person => person.id === personId
+      ? {
+          ...person,
+          anniversaries: person.anniversaries.filter(item => item.id !== anniversaryId),
+          updatedAt: now,
+        }
+      : person),
+  );
+}
+
+export function listPeriods() {
+  return readArray(LIFE_PERIODS_KEY)
+    .map(value => {
+      try {
+        return normalizePeriod(value);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean)
+    .sort((left, right) => right.startAt.localeCompare(left.startAt) || right.id.localeCompare(left.id));
+}
+
+export function savePeriod(input) {
+  const now = new Date().toISOString();
+  const items = listPeriods();
+  const existing = input?.id ? items.find(item => item.id === input.id) : null;
+  const record = normalizePeriod({
+    id: existing?.id || identifier("period"),
+    startAt: input?.startAt,
+    endAt: input?.endAt,
+    flow: input?.flow,
+    symptoms: input?.symptoms,
+    note: input?.note,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  });
+  const next = items.filter(item => item.id !== record.id);
+  next.push(record);
+  writeArray(LIFE_PERIODS_KEY, next);
+  return record;
+}
+
+export function deletePeriod(id) {
+  writeArray(LIFE_PERIODS_KEY, listPeriods().filter(item => item.id !== id));
+}
+
+export function getPeriodSettings() {
+  try {
+    return normalizePeriodSettings(JSON.parse(localStorage.getItem(LIFE_PERIOD_SETTINGS_KEY) || "null"));
+  } catch {
+    return normalizePeriodSettings(null);
+  }
+}
+
+export function savePeriodSettings(input) {
+  const settings = normalizePeriodSettings(input);
+  localStorage.setItem(LIFE_PERIOD_SETTINGS_KEY, JSON.stringify(settings));
+  return settings;
+}
+
 export function normaliseLifeBackup(value) {
   if (!value || typeof value !== "object") throw new Error("备份中没有生活数据");
   if (!Array.isArray(value.weights) || !Array.isArray(value.ledger)) {
     throw new Error("生活数据备份不完整");
   }
   return {
-    version: 1,
+    version: 2,
     profile: normalizeProfile(value.profile),
     preferences: {
       weightUnit: WEIGHT_UNITS.has(value.preferences?.weightUnit)
@@ -481,6 +774,13 @@ export function normaliseLifeBackup(value) {
     quickLedger: Array.isArray(value.quickLedger)
       ? value.quickLedger.map(normalizeQuickLedger)
       : [],
+    people: Array.isArray(value.people)
+      ? value.people.map(normalizePerson)
+      : [],
+    periods: Array.isArray(value.periods)
+      ? value.periods.map(normalizePeriod)
+      : [],
+    periodSettings: normalizePeriodSettings(value.periodSettings),
     stock: normalizeStockBackup(value.stock),
   };
 }
@@ -495,16 +795,29 @@ export function getLifeBackupData() {
     weights: listWeights(),
     ledger: listLedger(),
     quickLedger: listQuickLedger(),
+    people: listPeople(),
+    periods: listPeriods(),
+    periodSettings: getPeriodSettings(),
     stock: readStockData(),
   });
 }
 
 export function lifeCounts(data = getLifeBackupData()) {
   return {
-    lifeCount: data.profile || data.weights.length || data.ledger.length || data.quickLedger.length || data.stock?.trades.length ? 1 : 0,
+    lifeCount: data.profile
+      || data.weights.length
+      || data.ledger.length
+      || data.quickLedger.length
+      || data.people.length
+      || data.periods.length
+      || data.stock?.trades.length
+      ? 1
+      : 0,
     weightCount: data.weights.length,
     ledgerCount: data.ledger.length,
     quickLedgerCount: data.quickLedger.length,
+    peopleCount: data.people.length,
+    periodCount: data.periods.length,
     stockTradeCount: data.stock?.trades.length || 0,
   };
 }
@@ -523,6 +836,7 @@ export function restoreLifeStorage(snapshot) {
 
 export function mergeLifeBackup(value) {
   const hasIncomingWeightUnit = WEIGHT_UNITS.has(value?.preferences?.weightUnit);
+  const hasIncomingPeriodReminder = Number.isFinite(Number(value?.periodSettings?.reminderDays));
   const incoming = normaliseLifeBackup(value);
   const stockTradesAdded = mergeStockBackup(incoming.stock);
   const currentProfile = getLifeProfile();
@@ -564,6 +878,45 @@ export function mergeLifeBackup(value) {
     writeArray(LIFE_QUICK_LEDGER_KEY, merged);
   }
 
+  const currentPeople = listPeople();
+  const currentPeopleById = new Map(currentPeople.map(item => [item.id, item]));
+  let peopleAdded = 0;
+  let peopleUpdated = 0;
+  for (const person of incoming.people) {
+    const current = currentPeopleById.get(person.id);
+    if (!current) {
+      currentPeople.push(person);
+      currentPeopleById.set(person.id, person);
+      peopleAdded += 1;
+    } else if (person.updatedAt > current.updatedAt) {
+      const index = currentPeople.findIndex(item => item.id === person.id);
+      currentPeople[index] = person;
+      currentPeopleById.set(person.id, person);
+      peopleUpdated += 1;
+    }
+  }
+  if (peopleAdded || peopleUpdated) writeArray(LIFE_PEOPLE_KEY, currentPeople);
+
+  const currentPeriods = listPeriods();
+  const currentPeriodsById = new Map(currentPeriods.map(item => [item.id, item]));
+  let periodsAdded = 0;
+  let periodsUpdated = 0;
+  for (const period of incoming.periods) {
+    const current = currentPeriodsById.get(period.id);
+    if (!current) {
+      currentPeriods.push(period);
+      currentPeriodsById.set(period.id, period);
+      periodsAdded += 1;
+    } else if (period.updatedAt > current.updatedAt) {
+      const index = currentPeriods.findIndex(item => item.id === period.id);
+      currentPeriods[index] = period;
+      currentPeriodsById.set(period.id, period);
+      periodsUpdated += 1;
+    }
+  }
+  if (periodsAdded || periodsUpdated) writeArray(LIFE_PERIODS_KEY, currentPeriods);
+  if (hasIncomingPeriodReminder) savePeriodSettings(incoming.periodSettings);
+
   return {
     profileAdded: Boolean(
       incomingProfile
@@ -572,6 +925,10 @@ export function mergeLifeBackup(value) {
     weightsAdded: addedWeights.length,
     ledgerAdded: addedLedger.length,
     quickLedgerAdded: addedQuickLedger.length,
+    peopleAdded,
+    peopleUpdated,
+    periodsAdded,
+    periodsUpdated,
     stockTradesAdded,
   };
 }

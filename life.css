@@ -764,6 +764,1013 @@
   text-align: center;
 }
 
+/* Body & time: people, milestones and cycle forecast */
+.wellness-page {
+  display: grid;
+  gap: 14px;
+}
+
+.wellness-page > .life-page-head {
+  margin-bottom: 0;
+}
+
+.wellness-jump-nav {
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  overflow-x: auto;
+  border: 1px solid #e0e7e1;
+  border-radius: 12px;
+  background: #f8faf7;
+  scrollbar-width: none;
+}
+
+.wellness-jump-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.wellness-jump-nav button {
+  flex: 1 0 auto;
+  min-height: 34px;
+  padding: 6px 13px;
+  border-radius: 8px;
+  color: #66796c;
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.wellness-jump-nav button:hover,
+.wellness-jump-nav button:focus-visible {
+  background: #eaf2ec;
+  color: var(--life-green);
+}
+
+.wellness-reminder-panel,
+.wellness-people-panel,
+.wellness-period-panel {
+  overflow: hidden;
+}
+
+.wellness-reminder-note,
+.wellness-section-intro {
+  margin: -3px 18px 14px;
+  color: #7e8c83;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.wellness-reminder-list {
+  border-top: 1px solid #edf1ed;
+}
+
+.wellness-reminder-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto 18px;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 66px;
+  padding: 10px 17px;
+  border-bottom: 1px solid #edf1ed;
+  text-align: left;
+}
+
+.wellness-reminder-row:last-child {
+  border-bottom: 0;
+}
+
+.wellness-reminder-row:hover {
+  background: #f8fbf8;
+}
+
+.wellness-reminder-row.is-due {
+  background: linear-gradient(90deg, #fff9ea, #fffdf8 72%);
+}
+
+.wellness-reminder-row.is-overdue {
+  background: linear-gradient(90deg, #fff0eb, #fffafa 72%);
+}
+
+.wellness-reminder-mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: #eaf2eb;
+  color: #397058;
+}
+
+.wellness-reminder-row.is-due .wellness-reminder-mark {
+  background: #f4e6bd;
+  color: #866820;
+}
+
+.wellness-reminder-row.is-overdue .wellness-reminder-mark {
+  background: #f1d9d0;
+  color: #98513e;
+}
+
+.wellness-reminder-mark svg {
+  width: 17px;
+  height: 17px;
+}
+
+.wellness-reminder-copy {
+  min-width: 0;
+}
+
+.wellness-reminder-copy b,
+.wellness-reminder-copy small {
+  display: block;
+}
+
+.wellness-reminder-copy b {
+  color: #304d3f;
+  font-size: 12.5px;
+}
+
+.wellness-reminder-copy small {
+  margin-top: 3px;
+  overflow: hidden;
+  color: #839087;
+  font-size: 10px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wellness-reminder-count {
+  color: #4f6e5e;
+  font-size: 11px;
+  font-weight: 650;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.wellness-reminder-count small {
+  display: block;
+  margin-top: 3px;
+  color: #929c95;
+  font-size: 8.5px;
+  font-weight: 450;
+}
+
+.wellness-reminder-row > svg {
+  width: 15px;
+  height: 15px;
+  color: #9ca79f;
+}
+
+.wellness-empty-state {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  min-height: 145px;
+  padding: 22px;
+  color: #829087;
+  text-align: center;
+}
+
+.wellness-empty-state > svg {
+  width: 28px;
+  height: 28px;
+  margin-bottom: 9px;
+  color: #5c836f;
+}
+
+.wellness-empty-state b {
+  color: #385846;
+  font-size: 13px;
+}
+
+.wellness-empty-state p {
+  max-width: 490px;
+  margin: 5px 0 0;
+  font-size: 10.5px;
+  line-height: 1.65;
+}
+
+.wellness-empty-state > button {
+  margin-top: 12px;
+}
+
+.wellness-people-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+  padding: 0 15px 15px;
+}
+
+.wellness-person-card {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid #dfe7df;
+  border-radius: 13px;
+  background:
+    radial-gradient(circle at 100% 0, #eaf2e9 0, transparent 115px),
+    linear-gradient(145deg, #fff, #fbfcf9);
+  outline: none;
+}
+
+.wellness-person-card:focus-visible {
+  border-color: #6a9a80;
+  box-shadow: 0 0 0 3px #5f8e7424;
+}
+
+.wellness-person-card > header {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.wellness-person-avatar {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50% 50% 45% 55%;
+  background: #245e49;
+  color: #f4faf5;
+  font: 500 20px/1 "LXGW WenKai Lite", "Songti SC", serif;
+  box-shadow: inset 0 0 0 1px #ffffff24;
+}
+
+.wellness-person-card > header p,
+.wellness-person-card > header h3 {
+  margin: 0;
+}
+
+.wellness-person-card > header p {
+  color: #8a978f;
+  font-size: 9px;
+  letter-spacing: .08em;
+}
+
+.wellness-person-card > header h3 {
+  margin-top: 2px;
+  color: #2d4b3c;
+  font: 650 18px/1.3 "LXGW WenKai Lite", "Songti SC", serif;
+}
+
+.wellness-card-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.wellness-card-actions button,
+.wellness-anniversary-row button,
+.wellness-period-row button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: #87938b;
+}
+
+.wellness-card-actions button:hover,
+.wellness-anniversary-row button:hover,
+.wellness-period-row button:hover {
+  background: #eef4ef;
+  color: #315f49;
+}
+
+.wellness-card-actions svg,
+.wellness-anniversary-row button svg,
+.wellness-period-row button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.wellness-person-age {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e7ece7;
+}
+
+.wellness-person-age strong {
+  color: #315f49;
+  font: 650 16px/1.3 Inter, "Segoe UI", sans-serif;
+}
+
+.wellness-person-age span {
+  color: #829087;
+  font-size: 9.5px;
+  text-align: right;
+}
+
+.wellness-next-birthday {
+  display: grid;
+  gap: 2px;
+  margin: 10px 0;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: #f0f5f0;
+}
+
+.wellness-next-birthday b {
+  color: #456653;
+  font-size: 10.5px;
+}
+
+.wellness-next-birthday span,
+.wellness-next-birthday small {
+  color: #78877e;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.wellness-person-note {
+  margin: 8px 0 0;
+  color: #75847b;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.wellness-anniversaries {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px dashed #dfe6df;
+}
+
+.wellness-anniversary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.wellness-anniversary-head > b {
+  color: #566a5e;
+  font-size: 10px;
+}
+
+.wellness-anniversary-head > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 30px;
+  padding: 4px 7px;
+  border-radius: 7px;
+  color: #47705a;
+  font-size: 9.5px;
+}
+
+.wellness-anniversary-head svg {
+  width: 12px;
+  height: 12px;
+}
+
+.wellness-anniversary-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 30px 30px;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  padding: 7px;
+  border-radius: 8px;
+  background: #f9fbf8;
+}
+
+.wellness-anniversary-row > span:first-child {
+  min-width: 0;
+}
+
+.wellness-anniversary-row b,
+.wellness-anniversary-row small {
+  display: block;
+}
+
+.wellness-anniversary-row b {
+  color: #4d6256;
+  font-size: 10px;
+}
+
+.wellness-anniversary-row small,
+.wellness-anniversary-row > span:nth-child(2) {
+  margin-top: 2px;
+  color: #8a978f;
+  font-size: 8.5px;
+  line-height: 1.45;
+}
+
+.wellness-anniversary-row > span:nth-child(2) {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.wellness-no-anniversary {
+  margin: 7px 0 0;
+  color: #97a099;
+  font-size: 9.5px;
+}
+
+.wellness-period-panel {
+  padding-bottom: 14px;
+}
+
+.wellness-period-panel:focus-visible {
+  outline: 3px solid #78a68d55;
+  outline-offset: 2px;
+}
+
+.wellness-period-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 15px 13px;
+}
+
+.wellness-period-summary article {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e0e7e1;
+  border-radius: 10px;
+  background: #fbfcfa;
+}
+
+.wellness-period-summary article.is-next {
+  border-color: #d4e1d7;
+  background: #eef5ef;
+}
+
+.wellness-period-summary span,
+.wellness-period-summary strong,
+.wellness-period-summary small {
+  display: block;
+}
+
+.wellness-period-summary span {
+  color: #8a968e;
+  font-size: 9px;
+}
+
+.wellness-period-summary strong {
+  margin-top: 5px;
+  color: #325744;
+  font: 650 15px/1.35 Inter, "Segoe UI", sans-serif;
+}
+
+.wellness-period-summary small {
+  margin-top: 4px;
+  color: #829087;
+  font-size: 8.5px;
+  line-height: 1.5;
+}
+
+.wellness-period-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(210px, .65fr);
+  gap: 12px;
+  padding: 0 15px 13px;
+}
+
+.wellness-period-calendar {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e0e7e1;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.wellness-period-calendar > header {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 34px auto;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.wellness-period-calendar > header > button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  color: #61766a;
+}
+
+.wellness-period-calendar > header > button:hover {
+  background: #eef4ef;
+}
+
+.wellness-period-calendar > header svg {
+  width: 14px;
+  height: 14px;
+}
+
+.wellness-period-calendar > header b {
+  color: #385747;
+  font: 650 13px/1.4 "LXGW WenKai Lite", "Songti SC", serif;
+  text-align: center;
+}
+
+.wellness-period-calendar > header .wellness-calendar-today {
+  width: auto;
+  padding-inline: 8px;
+  color: #54705f;
+  font-size: 9.5px;
+}
+
+.wellness-calendar-weekdays,
+.wellness-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.wellness-calendar-weekdays span {
+  padding: 4px 0;
+  color: #95a099;
+  font-size: 8px;
+  text-align: center;
+}
+
+.wellness-calendar-grid {
+  gap: 2px;
+}
+
+.wellness-calendar-blank {
+  aspect-ratio: 1;
+}
+
+.wellness-calendar-day {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  aspect-ratio: 1;
+  border-radius: 7px;
+  color: #66776d;
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.wellness-calendar-day i {
+  position: absolute;
+  right: 2px;
+  bottom: 1px;
+  color: #fff;
+  font-size: 6px;
+  font-style: normal;
+  line-height: 1;
+}
+
+.wellness-calendar-day.is-period {
+  background: #e9a49d;
+  color: #713e39;
+  font-weight: 650;
+}
+
+.wellness-calendar-day.is-period.is-heavy {
+  background: #dc8278;
+  color: #fff;
+}
+
+.wellness-calendar-day.is-period.is-light {
+  background: #f3c2bc;
+}
+
+.wellness-calendar-day.is-start {
+  box-shadow: inset 0 0 0 1.5px #a7564e;
+}
+
+.wellness-calendar-day.is-predicted {
+  outline: 1px dashed #a66d65;
+  outline-offset: -2px;
+  background: #fff4f1;
+  color: #8c5f59;
+}
+
+.wellness-calendar-day.is-predicted::after {
+  content: "";
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  top: 4px;
+  right: 4px;
+  border-radius: 50%;
+  background: #b7776d;
+}
+
+.wellness-calendar-day.is-predicted i {
+  color: #8c5f59;
+}
+
+.wellness-calendar-day.is-today {
+  box-shadow: inset 0 0 0 1.5px #2f6c51;
+}
+
+.wellness-period-calendar > footer {
+  display: flex;
+  gap: 13px;
+  margin-top: 8px;
+  color: #8b978f;
+  font-size: 8.5px;
+}
+
+.wellness-period-calendar > footer span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.wellness-period-calendar > footer i {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+}
+
+.wellness-period-calendar > footer .is-actual {
+  background: #e9a49d;
+}
+
+.wellness-period-calendar > footer .is-estimate {
+  border: 1px dashed #a66d65;
+  background: #fff4f1;
+}
+
+.wellness-period-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wellness-period-tools .life-field {
+  margin: 0;
+}
+
+.wellness-period-method {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 9px;
+  background: #f3f7f2;
+}
+
+.wellness-period-method > svg {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  color: #54775f;
+}
+
+.wellness-period-method p {
+  margin: 0;
+}
+
+.wellness-period-method b,
+.wellness-period-method span {
+  display: block;
+}
+
+.wellness-period-method b {
+  color: #4b6355;
+  font-size: 10px;
+}
+
+.wellness-period-method span {
+  margin-top: 4px;
+  color: #7d8a82;
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.wellness-period-history {
+  margin: 0 15px;
+  overflow: hidden;
+  border: 1px solid #e0e7e1;
+  border-radius: 11px;
+}
+
+.wellness-period-history > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #f8faf7;
+}
+
+.wellness-period-history > header b {
+  color: #4d6557;
+  font-size: 11px;
+}
+
+.wellness-period-history > header span {
+  color: #8d9991;
+  font-size: 9px;
+}
+
+.wellness-period-row {
+  display: grid;
+  grid-template-columns: 190px 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 57px;
+  padding: 9px 12px;
+  border-top: 1px solid #edf1ed;
+}
+
+.wellness-period-row time b,
+.wellness-period-row time small {
+  display: block;
+}
+
+.wellness-period-row time b {
+  color: #4b6254;
+  font-size: 10.5px;
+}
+
+.wellness-period-row time small {
+  margin-top: 3px;
+  color: #87948b;
+  font-size: 8.5px;
+}
+
+.wellness-period-flow {
+  padding: 4px 6px;
+  border-radius: 99px;
+  background: #f5d9d5;
+  color: #8c524b;
+  font-size: 8.5px;
+  text-align: center;
+}
+
+.wellness-period-flow.is-light {
+  background: #f8e5e2;
+}
+
+.wellness-period-flow.is-heavy {
+  background: #dfa9a2;
+  color: #603632;
+}
+
+.wellness-period-row > p {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #78867d;
+  font-size: 9.5px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wellness-period-row > div {
+  display: flex;
+  gap: 2px;
+}
+
+.wellness-dialog {
+  width: min(620px, calc(100% - 28px));
+  max-width: none;
+  max-height: min(90dvh, 860px);
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: var(--life-ink);
+}
+
+.wellness-dialog::backdrop {
+  background: #112a20a8;
+  backdrop-filter: blur(3px);
+}
+
+.wellness-dialog-card {
+  display: flex;
+  max-height: min(90dvh, 860px);
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #fbfdfa;
+  box-shadow: 0 28px 80px #0c24193d;
+}
+
+.wellness-dialog-card > header {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 17px 19px 13px;
+  border-bottom: 1px solid #e4ebe5;
+  background: #fbfdfaf5;
+  backdrop-filter: blur(12px);
+}
+
+.wellness-dialog-card > header p,
+.wellness-dialog-card > header h2 {
+  margin: 0;
+}
+
+.wellness-dialog-card > header p {
+  color: #8c9990;
+  font: 650 8.5px/1.4 Inter, "Segoe UI", sans-serif;
+  letter-spacing: .14em;
+}
+
+.wellness-dialog-card > header h2 {
+  margin-top: 2px;
+  color: #2e4d3d;
+  font: 650 20px/1.35 "LXGW WenKai Lite", "Songti SC", serif;
+}
+
+.wellness-dialog-close {
+  display: grid;
+  flex: 0 0 40px;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: #75847b;
+}
+
+.wellness-dialog-close:hover {
+  background: #edf3ee;
+}
+
+.wellness-dialog-close svg {
+  width: 17px;
+  height: 17px;
+}
+
+.wellness-dialog-body {
+  min-height: 0;
+  padding: 16px 19px 19px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.wellness-editor-form {
+  display: grid;
+  gap: 13px;
+}
+
+.wellness-editor-form .life-field {
+  margin: 0;
+}
+
+.wellness-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.wellness-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 13px;
+  border: 1px solid #dfe7e0;
+  border-radius: 11px;
+  background: #f7faf7;
+}
+
+.wellness-fieldset legend {
+  padding: 0 5px;
+  color: #4b6556;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.wellness-fieldset legend small {
+  color: #8b978f;
+  font-size: 9px;
+  font-weight: 450;
+}
+
+.wellness-calendar-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  margin-bottom: 10px;
+  padding: 3px;
+  border-radius: 9px;
+  background: #e8efe9;
+}
+
+.wellness-calendar-tabs button {
+  min-height: 38px;
+  border-radius: 7px;
+  color: #728177;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.wellness-calendar-tabs button[aria-pressed="true"] {
+  background: #fff;
+  color: #2c6249;
+  box-shadow: 0 1px 6px #1c3d2b1a;
+}
+
+[data-calendar-panel][hidden] {
+  display: none;
+}
+
+.wellness-lunar-fields {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.wellness-lunar-fields label {
+  color: #63756a;
+}
+
+.wellness-lunar-fields select {
+  min-height: 39px;
+  border: 1px solid #d9e2da;
+  background: #fff;
+  color: #314b3d;
+}
+
+.wellness-leap-toggle {
+  color: #596d61 !important;
+}
+
+.wellness-leap-toggle span {
+  color: #596d61;
+  font-size: 10.5px;
+}
+
+.wellness-calendar-preview {
+  min-height: 16px;
+  margin: 8px 0 0;
+  color: #55705f;
+  font-size: 9.5px;
+  line-height: 1.5;
+}
+
+.wellness-calendar-preview.is-error {
+  color: #a34e3d;
+}
+
+.wellness-symptom-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wellness-symptom-grid label {
+  position: relative;
+  display: inline-flex;
+}
+
+.wellness-symptom-grid input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.wellness-symptom-grid span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 7px 11px;
+  border: 1px solid #d8e1d9;
+  border-radius: 99px;
+  background: #fff;
+  color: #64766b;
+  font-size: 10px;
+}
+
+.wellness-symptom-grid input:checked + span {
+  border-color: #5f8e74;
+  background: #e8f1e9;
+  color: #2e654c;
+  font-weight: 650;
+}
+
+.wellness-symptom-grid input:focus-visible + span {
+  outline: 3px solid #76a48b55;
+  outline-offset: 1px;
+}
+
+.wellness-dialog-actions {
+  position: sticky;
+  bottom: -19px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 2px -19px -19px;
+  padding: 13px 19px 15px;
+  border-top: 1px solid #e4ebe5;
+  background: #fbfdfaf5;
+  backdrop-filter: blur(12px);
+}
+
+.wellness-dialog-actions button {
+  min-height: 40px;
+  padding-inline: 15px;
+}
+
 /* Ledger */
 .ledger-page-head {
   margin-bottom: 14px;
@@ -1790,6 +2797,16 @@
     grid-template-columns: 1fr;
   }
 
+  .wellness-period-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .wellness-period-tools {
+    display: grid;
+    grid-template-columns: minmax(0, .7fr) minmax(210px, 1.3fr);
+    align-items: stretch;
+  }
+
   .ledger-insight-panel {
     min-height: 0;
   }
@@ -1822,6 +2839,277 @@
 
   .life-page-head > .life-soft-button {
     margin-top: 18px;
+  }
+
+  .wellness-jump-nav {
+    margin-top: -2px;
+    padding: 4px;
+  }
+
+  .wellness-jump-nav button {
+    min-height: 44px;
+    padding-inline: 12px;
+  }
+
+  .wellness-reminder-note,
+  .wellness-section-intro {
+    margin-right: 13px;
+    margin-left: 13px;
+    font-size: 10px;
+  }
+
+  .wellness-reminder-row {
+    grid-template-columns: 36px minmax(0, 1fr) 18px;
+    gap: 5px 10px;
+    min-height: 76px;
+    padding: 10px 13px;
+  }
+
+  .wellness-reminder-mark {
+    grid-row: 1 / 3;
+  }
+
+  .wellness-reminder-copy {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .wellness-reminder-copy small {
+    white-space: normal;
+  }
+
+  .wellness-reminder-count {
+    grid-column: 2;
+    grid-row: 2;
+    color: #63786a;
+    font-size: 9.5px;
+    text-align: left;
+  }
+
+  .wellness-reminder-count small {
+    display: inline;
+    margin-left: 7px;
+    font-size: 8px;
+  }
+
+  .wellness-reminder-row > svg {
+    grid-column: 3;
+    grid-row: 1 / 3;
+  }
+
+  .wellness-people-grid {
+    grid-template-columns: 1fr;
+    padding: 0 12px 12px;
+  }
+
+  .wellness-person-card {
+    padding: 13px;
+  }
+
+  .wellness-person-card > header {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+  }
+
+  .wellness-person-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .wellness-card-actions button,
+  .wellness-anniversary-row button,
+  .wellness-period-row button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .wellness-person-age {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .wellness-person-age span {
+    text-align: left;
+  }
+
+  .wellness-anniversary-head > button {
+    min-height: 44px;
+    padding-inline: 10px;
+  }
+
+  .wellness-anniversary-row {
+    grid-template-columns: minmax(0, 1fr) 44px 44px;
+    gap: 3px;
+  }
+
+  .wellness-anniversary-row > span:nth-child(2) {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .wellness-anniversary-row > button:nth-last-child(2) {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+
+  .wellness-anniversary-row > button:last-child {
+    grid-column: 3;
+    grid-row: 1 / 3;
+  }
+
+  .wellness-period-panel {
+    padding-bottom: 12px;
+  }
+
+  .wellness-period-panel > .life-panel-head {
+    align-items: flex-start;
+  }
+
+  .wellness-period-panel > .life-panel-head .life-soft-button,
+  .wellness-people-panel > .life-panel-head .life-soft-button {
+    min-height: 44px;
+    padding-inline: 10px;
+  }
+
+  .wellness-period-summary {
+    grid-template-columns: 1fr;
+    padding: 0 12px 11px;
+  }
+
+  .wellness-period-summary article {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    padding: 10px 11px;
+  }
+
+  .wellness-period-summary strong {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    margin: 0;
+    text-align: right;
+  }
+
+  .wellness-period-summary small {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .wellness-period-layout {
+    gap: 10px;
+    padding: 0 12px 11px;
+  }
+
+  .wellness-period-tools {
+    display: flex;
+  }
+
+  .wellness-period-calendar > header {
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+  }
+
+  .wellness-period-calendar > header > button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .wellness-period-calendar > header .wellness-calendar-today {
+    grid-column: 1 / -1;
+    justify-self: center;
+    min-height: 36px;
+    margin-top: -4px;
+  }
+
+  .wellness-calendar-day {
+    border-radius: 6px;
+    font-size: 10px;
+  }
+
+  .wellness-period-history {
+    margin-inline: 12px;
+  }
+
+  .wellness-period-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 8px;
+    padding: 10px;
+  }
+
+  .wellness-period-row time {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .wellness-period-flow {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .wellness-period-row > p {
+    grid-column: 1;
+    grid-row: 2;
+    white-space: normal;
+  }
+
+  .wellness-period-row > div {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .wellness-symptom-grid span {
+    min-height: 44px;
+    padding-inline: 13px;
+  }
+
+  .wellness-dialog {
+    width: calc(100% - 12px);
+    max-height: 94dvh;
+    border-radius: 15px;
+  }
+
+  .wellness-dialog-card {
+    max-height: 94dvh;
+    border-radius: 15px;
+  }
+
+  .wellness-dialog-card > header {
+    padding: 13px 14px 11px;
+  }
+
+  .wellness-dialog-card > header h2 {
+    font-size: 18px;
+  }
+
+  .wellness-dialog-close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .wellness-dialog-body {
+    padding: 13px 14px 16px;
+  }
+
+  .wellness-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wellness-calendar-tabs button {
+    min-height: 44px;
+  }
+
+  .wellness-lunar-fields select {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .wellness-dialog-actions {
+    bottom: -16px;
+    margin: 2px -14px -16px;
+    padding: 11px 14px 13px;
+  }
+
+  .wellness-dialog-actions button {
+    min-height: 44px;
   }
 
   .life-age-card {

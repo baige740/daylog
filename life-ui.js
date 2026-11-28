@@ -1,18 +1,28 @@
 import { icon } from "./icons.js";
 import { ledgerCategories, ledgerCategoryAliases, ledgerCategoryGroup } from "./ledger-categories.js";
 import {
+  deleteAnniversary,
   deleteLedger,
+  deletePeriod,
+  deletePerson,
   deleteQuickLedger,
   deleteWeight,
   getLifeProfile,
+  getPeriodSettings,
   getWeightUnit,
   listLedger,
+  listPeople,
+  listPeriods,
   listQuickLedger,
   listWeights,
   lunarDateLabel,
   lunarToSolar,
+  saveAnniversary,
   saveLedger,
   saveLifeProfile,
+  savePeriod,
+  savePeriodSettings,
+  savePerson,
   saveQuickLedger,
   saveWeight,
   saveWeightUnit,
@@ -35,6 +45,7 @@ const LUNAR_DAYS = Array.from({ length: 30 }, (_, index) => [
 
 let ageTimer = 0;
 let weightRange = 30;
+let periodCalendarMonth = monthStart(new Date());
 let ledgerOptions = {};
 let ledgerState = {
   month: monthStart(new Date()),
@@ -401,6 +412,366 @@ function birthdayText(profile, nowValue = new Date()) {
   };
 }
 
+function dateInputValue(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function isoFromDateInput(value) {
+  const text = String(value || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return "";
+  const date = new Date(`${text}T12:00:00`);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : "";
+}
+
+function dayDistance(fromValue, toValue) {
+  const from = startOfLocalDay(fromValue);
+  const to = startOfLocalDay(toValue);
+  return Math.round((to.getTime() - from.getTime()) / 86400000);
+}
+
+function nextSolarOccurrence(value, nowValue = new Date(), includeYear = false) {
+  const source = new Date(value);
+  if (!Number.isFinite(source.getTime())) return null;
+  const today = startOfLocalDay(nowValue);
+  const month = source.getMonth();
+  const day = source.getDate();
+  const year = today.getFullYear();
+  const make = targetYear => {
+    const lastDay = new Date(targetYear, month + 1, 0).getDate();
+    return new Date(targetYear, month, Math.min(day, lastDay));
+  };
+  let date = make(year);
+  if (date < today) date = make(year + 1);
+  return {
+    date,
+    days: dayDistance(today, date),
+    year: date.getFullYear(),
+    label: date.toLocaleDateString("zh-CN", {
+      ...(includeYear ? { year: "numeric" } : {}),
+      month: "long",
+      day: "numeric",
+      weekday: "short",
+    }),
+    fallback: "",
+  };
+}
+
+function nextLunarDateOccurrence(lunarDate, nowValue = new Date()) {
+  if (!lunarDate) return null;
+  const now = nowValue instanceof Date ? nowValue : new Date(nowValue);
+  const today = startOfLocalDay(now);
+  const currentLunar = solarToLunar(now);
+  if (!currentLunar) return null;
+  for (let year = currentLunar.year; year <= 2100; year += 1) {
+    const occurrence = resolveLunarOccurrence(year, lunarDate);
+    if (!occurrence?.date) continue;
+    const date = startOfLocalDay(occurrence.date);
+    if (date < today) continue;
+    const fallback = [];
+    if (occurrence.adjustedMonth) fallback.push("今年没有闰月，按同名普通月");
+    if (occurrence.adjustedDay) fallback.push("这个月没有三十，按廿九");
+    return {
+      date,
+      days: dayDistance(today, date),
+      year,
+      label: `${solarDateLabel(date)} · ${lunarDateLabel({ year, ...lunarDate })}`,
+      fallback: fallback.join("；"),
+    };
+  }
+  return null;
+}
+
+function nextAnniversaryOccurrence(anniversary, nowValue = new Date()) {
+  return anniversary.calendar === "lunar"
+    ? nextLunarDateOccurrence(anniversary.lunarDate, nowValue)
+    : nextSolarOccurrence(anniversary.solarAt, nowValue);
+}
+
+function nextPersonBirthday(person, nowValue = new Date()) {
+  return person.birthCalendar === "lunar"
+    ? nextLunarDateOccurrence(person.lunarBirth, nowValue)
+    : nextSolarOccurrence(person.birthAt, nowValue);
+}
+
+function relationshipLabel(value) {
+  return {
+    father: "父亲",
+    mother: "母亲",
+    spouse: "配偶",
+    daughter: "女儿",
+    son: "儿子",
+    sibling: "兄弟姐妹",
+    grandparent: "祖辈",
+    other: "重要的人",
+  }[value] || "重要的人";
+}
+
+function reminderCopy(days, reminderDays) {
+  if (days < 0) return `已过 ${Math.abs(days)} 天`;
+  if (days === 0) return "就是今天";
+  if (days <= reminderDays) return `已进入提醒 · 还有 ${days} 天`;
+  return `还有 ${days} 天`;
+}
+
+function upcomingMilestones(people, periods, periodSettings, nowValue = new Date()) {
+  const now = nowValue instanceof Date ? nowValue : new Date(nowValue);
+  const events = [];
+  for (const person of people) {
+    const birthday = nextPersonBirthday(person, now);
+    if (birthday) {
+      events.push({
+        type: "birthday",
+        personId: person.id,
+        title: `${person.name}生日`,
+        detail: `${relationshipLabel(person.relation)} · ${birthday.label}${birthday.fallback ? ` · ${birthday.fallback}` : ""}`,
+        days: birthday.days,
+        reminderDays: person.birthdayReminderDays,
+        date: birthday.date,
+      });
+    }
+    for (const anniversary of person.anniversaries) {
+      const next = nextAnniversaryOccurrence(anniversary, now);
+      if (!next) continue;
+      events.push({
+        type: "anniversary",
+        personId: person.id,
+        anniversaryId: anniversary.id,
+        title: `${person.name} · ${anniversary.title}`,
+        detail: `${next.label}${anniversary.note ? ` · ${anniversary.note}` : ""}${next.fallback ? ` · ${next.fallback}` : ""}`,
+        days: next.days,
+        reminderDays: anniversary.reminderDays,
+        date: next.date,
+      });
+    }
+  }
+  const prediction = periodPrediction(periods, now);
+  if (prediction?.nextStart) {
+    const days = dayDistance(now, prediction.nextStart);
+    events.push({
+      type: "period",
+      title: "预计经期",
+      detail: `${solarDateLabel(prediction.nextStart)} · 根据最近 ${prediction.cycleCount} 个周期估算`,
+      days,
+      reminderDays: periodSettings.reminderDays,
+      date: prediction.nextStart,
+    });
+  }
+  return events.sort((left, right) =>
+    left.days - right.days
+    || String(left.title).localeCompare(String(right.title), "zh-CN"));
+}
+
+function periodPrediction(periods, nowValue = new Date()) {
+  if (!periods.length) return null;
+  const ordered = periods.slice().sort((left, right) => left.startAt.localeCompare(right.startAt));
+  const starts = ordered.map(item => startOfLocalDay(item.startAt));
+  const cycles = [];
+  for (let index = 1; index < starts.length; index += 1) {
+    const length = dayDistance(starts[index - 1], starts[index]);
+    if (length >= 15 && length <= 45) cycles.push(length);
+  }
+  const recentCycles = cycles.slice(-6);
+  const durations = ordered
+    .filter(item => item.endAt)
+    .map(item => dayDistance(item.startAt, item.endAt) + 1)
+    .filter(length => length >= 1 && length <= 15)
+    .slice(-6);
+  const average = list => list.length
+    ? Math.round(list.reduce((sum, value) => sum + value, 0) / list.length)
+    : null;
+  const averageCycle = average(recentCycles);
+  const averageDuration = average(durations);
+  const latest = ordered.at(-1);
+  const latestStart = startOfLocalDay(latest.startAt);
+  const nextStart = averageCycle
+    ? new Date(latestStart.getFullYear(), latestStart.getMonth(), latestStart.getDate() + averageCycle)
+    : null;
+  const nextEnd = nextStart && averageDuration
+    ? new Date(nextStart.getFullYear(), nextStart.getMonth(), nextStart.getDate() + averageDuration - 1)
+    : null;
+  return {
+    ordered,
+    cycles,
+    recentCycles,
+    cycleCount: recentCycles.length,
+    averageCycle,
+    variation: recentCycles.length > 1
+      ? Math.max(...recentCycles) - Math.min(...recentCycles)
+      : null,
+    averageDuration,
+    latestStart,
+    nextStart,
+    nextEnd,
+  };
+}
+
+function lunarPickerMarkup({ year = "", month = 1, day = 1, isLeap = false, includeYear = true } = {}) {
+  const currentYear = new Date().getFullYear();
+  const years = includeYear
+    ? Array.from({ length: currentYear - 1899 }, (_, index) => currentYear - index)
+        .map(item => `<option value="${item}"${Number(year) === item ? " selected" : ""}>${item} 年</option>`)
+        .join("")
+    : "";
+  return `<div class="life-lunar-fields wellness-lunar-fields">
+    ${includeYear ? `<label><span>年</span><select name="lunarYear" required><option value=""${year ? "" : " selected"} disabled>选择</option>${years}</select></label>` : ""}
+    <label><span>月</span><select name="lunarMonth">${LUNAR_MONTHS.map((name, index) => `<option value="${index + 1}"${Number(month) === index + 1 ? " selected" : ""}>${name}</option>`).join("")}</select></label>
+    <label><span>日</span><select name="lunarDay">${LUNAR_DAYS.map((name, index) => `<option value="${index + 1}"${Number(day) === index + 1 ? " selected" : ""}>${name}</option>`).join("")}</select></label>
+  </div>
+  <label class="life-leap-toggle wellness-leap-toggle"><input name="lunarLeap" type="checkbox"${isLeap ? " checked" : ""}><span>闰月</span></label>`;
+}
+
+function milestonesMarkup(events) {
+  const visible = events
+    .filter(event => event.days >= -7 && event.days <= 90)
+    .slice(0, 8);
+  if (!visible.length) {
+    return `<div class="wellness-empty-state">${icon("calendar")}<b>接下来还没有需要提醒的日期</b><p>添加重要人物、纪念日或生理期记录后，这里会把事项串在一起。</p></div>`;
+  }
+  return `<div class="wellness-reminder-list">${visible.map(event => {
+    const due = event.days >= 0 && event.days <= event.reminderDays;
+    const overdue = event.type === "period" && event.days < 0;
+    const target = event.personId
+      ? `person:${event.personId}`
+      : "period";
+    return `<button type="button" class="wellness-reminder-row${due ? " is-due" : ""}${overdue ? " is-overdue" : ""}" data-reminder-target="${target}">
+      <span class="wellness-reminder-mark">${icon(event.type === "period" ? "activity" : "calendar")}</span>
+      <span class="wellness-reminder-copy"><b>${escapeHTML(event.title)}</b><small>${escapeHTML(event.detail)}</small></span>
+      <span class="wellness-reminder-count">${escapeHTML(reminderCopy(event.days, event.reminderDays))}<small>提前 ${event.reminderDays} 天提醒</small></span>
+      ${icon("chevronR")}
+    </button>`;
+  }).join("")}</div>`;
+}
+
+function peopleMarkup(people, nowValue = new Date()) {
+  if (!people.length) {
+    return `<div class="wellness-empty-state wellness-people-empty">${icon("user")}<b>把重要的人放在时间里</b><p>记下父母、伴侣和孩子的生日。公历或农历都可以，也能添加结婚、相识等重要纪念日。</p><button type="button" class="life-soft-button" data-add-person>${icon("plus")}添加第一位</button></div>`;
+  }
+  return `<div class="wellness-people-grid">${people.map(person => {
+    const age = ageParts(person, nowValue);
+    const birthday = nextPersonBirthday(person, nowValue);
+    const birthLabel = person.birthCalendar === "lunar"
+      ? lunarDateLabel(person.lunarBirth)
+      : solarDateLabel(person.birthAt);
+    return `<article class="wellness-person-card" id="wellness-person-${person.id}" tabindex="-1">
+      <header>
+        <span class="wellness-person-avatar">${escapeHTML(person.name.slice(0, 1))}</span>
+        <div><p>${escapeHTML(relationshipLabel(person.relation))}</p><h3>${escapeHTML(person.name)}</h3></div>
+        <div class="wellness-card-actions">
+          <button type="button" data-edit-person="${person.id}" aria-label="编辑 ${escapeHTML(person.name)}" title="编辑">${icon("pen")}</button>
+          <button type="button" data-delete-person="${person.id}" aria-label="删除 ${escapeHTML(person.name)}" title="删除">${icon("trash")}</button>
+        </div>
+      </header>
+      <div class="wellness-person-age">
+        <strong>${age ? `${age.years} 岁 ${age.months} 个月` : "年龄待确认"}</strong>
+        <span>${escapeHTML(birthLabel)}</span>
+      </div>
+      <p class="wellness-next-birthday">${birthday ? `<b>${escapeHTML(birthday.label)}</b><span>${escapeHTML(reminderCopy(birthday.days, person.birthdayReminderDays))} · 提前 ${person.birthdayReminderDays} 天提醒</span>${birthday.fallback ? `<small>${escapeHTML(birthday.fallback)}</small>` : ""}` : "暂时无法计算下一次生日"}</p>
+      ${person.note ? `<p class="wellness-person-note">${escapeHTML(person.note)}</p>` : ""}
+      <div class="wellness-anniversaries">
+        <div class="wellness-anniversary-head"><b>纪念日</b><button type="button" data-add-anniversary="${person.id}">${icon("plus")}添加</button></div>
+        ${person.anniversaries.length ? person.anniversaries.map(anniversary => {
+          const next = nextAnniversaryOccurrence(anniversary, nowValue);
+          return `<div class="wellness-anniversary-row">
+            <span><b>${escapeHTML(anniversary.title)}</b><small>${next ? `${escapeHTML(next.label)} · ${escapeHTML(reminderCopy(next.days, anniversary.reminderDays))}` : "暂时无法计算"}</small></span>
+            <span>提前 ${anniversary.reminderDays} 天</span>
+            <button type="button" data-edit-anniversary="${anniversary.id}" data-person-id="${person.id}" aria-label="编辑 ${escapeHTML(anniversary.title)}" title="编辑">${icon("pen")}</button>
+            <button type="button" data-delete-anniversary="${anniversary.id}" data-person-id="${person.id}" aria-label="删除 ${escapeHTML(anniversary.title)}" title="删除">${icon("trash")}</button>
+          </div>`;
+        }).join("") : '<p class="wellness-no-anniversary">还没有纪念日</p>'}
+      </div>
+    </article>`;
+  }).join("")}</div>`;
+}
+
+function periodCalendarMarkup(periods, prediction, monthValue) {
+  const month = monthStart(monthValue);
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const leading = month.getDay();
+  const days = new Date(year, monthIndex + 1, 0).getDate();
+  const today = startOfLocalDay(new Date());
+  const cells = [];
+  for (let index = 0; index < leading; index += 1) {
+    cells.push('<span class="wellness-calendar-blank" aria-hidden="true"></span>');
+  }
+  for (let dayNumber = 1; dayNumber <= days; dayNumber += 1) {
+    const date = new Date(year, monthIndex, dayNumber);
+    const actual = periods.find(item => {
+      const start = startOfLocalDay(item.startAt);
+      const end = item.endAt ? startOfLocalDay(item.endAt) : start;
+      return date >= start && date <= end;
+    });
+    const predicted = prediction?.nextStart && prediction.nextEnd
+      && date >= startOfLocalDay(prediction.nextStart)
+      && date <= startOfLocalDay(prediction.nextEnd);
+    const isStart = actual && date.getTime() === startOfLocalDay(actual.startAt).getTime();
+    const isToday = date.getTime() === today.getTime();
+    const flow = actual?.flow || "";
+    const label = [
+      `${year}年${monthIndex + 1}月${dayNumber}日`,
+      actual ? `实际经期${isStart ? "开始" : ""}` : "",
+      predicted ? "预计经期" : "",
+    ].filter(Boolean).join("，");
+    cells.push(`<time datetime="${dateInputValue(date)}" class="wellness-calendar-day${actual ? ` is-period is-${flow}` : ""}${isStart ? " is-start" : ""}${predicted ? " is-predicted" : ""}${isToday ? " is-today" : ""}" aria-label="${escapeHTML(label)}"><span>${dayNumber}</span>${isStart ? '<i>始</i>' : ""}${predicted && !actual ? '<i>预计</i>' : ""}</time>`);
+  }
+  return `<div class="wellness-period-calendar">
+    <header>
+      <button type="button" data-period-month="-1" aria-label="上个月">${icon("chevronL")}</button>
+      <b>${year} 年 ${monthIndex + 1} 月</b>
+      <button type="button" data-period-month="1" aria-label="下个月">${icon("chevronR")}</button>
+      <button type="button" class="wellness-calendar-today" data-period-month="0">回到本月</button>
+    </header>
+    <div class="wellness-calendar-weekdays" aria-hidden="true"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+    <div class="wellness-calendar-grid">${cells.join("")}</div>
+    <footer><span><i class="is-actual"></i>实际记录</span><span><i class="is-estimate"></i>预计日期</span></footer>
+  </div>`;
+}
+
+function periodSectionMarkup(periods, settings, nowValue = new Date()) {
+  const prediction = periodPrediction(periods, nowValue);
+  const latest = prediction?.ordered.at(-1);
+  const cycleValue = prediction?.averageCycle ? `${prediction.averageCycle} 天` : "记录 2 次后显示";
+  const variationValue = prediction?.variation === null || prediction?.variation === undefined
+    ? "等待更多周期"
+    : `波动 ${prediction.variation} 天`;
+  const nextValue = prediction?.nextStart ? solarDateLabel(prediction.nextStart) : "等待周期数据";
+  const nextDetail = prediction?.nextStart
+    ? `${reminderCopy(dayDistance(nowValue, prediction.nextStart), settings.reminderDays)}${prediction.averageDuration ? ` · 预计持续 ${prediction.averageDuration} 天` : ""}`
+    : "至少记录两次开始日期后才能预测";
+  return `<section class="life-panel wellness-period-panel" id="wellness-period" tabindex="-1">
+    <header class="life-panel-head">
+      <div><p>CYCLE &amp; FORECAST</p><h2>生理期记录与预测</h2></div>
+      <button type="button" class="life-soft-button" data-add-period>${icon("plus")}记一次</button>
+    </header>
+    <div class="wellness-period-summary">
+      <article><span>最近开始</span><strong>${latest ? solarDateLabel(latest.startAt) : "还没有记录"}</strong><small>${latest?.endAt ? `持续 ${dayDistance(latest.startAt, latest.endAt) + 1} 天` : latest ? "上次记录为持续中" : "从一次开始日期开始"}</small></article>
+      <article><span>平均周期</span><strong>${cycleValue}</strong><small>${variationValue}</small></article>
+      <article class="is-next"><span>下次预计</span><strong>${nextValue}</strong><small>${nextDetail}</small></article>
+    </div>
+    <div class="wellness-period-layout">
+      ${periodCalendarMarkup(periods, prediction, periodCalendarMonth)}
+      <div class="wellness-period-tools">
+        <label class="life-field"><span>预计经期提前提醒</span><select data-period-reminder>${Array.from({ length: 8 }, (_, day) => `<option value="${day}"${settings.reminderDays === day ? " selected" : ""}>${day === 0 ? "当天提醒" : `提前 ${day} 天`}</option>`).join("")}</select></label>
+        <div class="wellness-period-method">${icon("sparkles")}<p><b>预测怎么算</b><span>使用最近最多 6 个有效周期求平均；实际记录与预计日期在日历中以不同样式显示。预测只作生活参考。</span></p></div>
+      </div>
+    </div>
+    <div class="wellness-period-history">
+      <header><b>周期记录</b><span>${periods.length} 次</span></header>
+      ${periods.length ? periods.map(item => {
+        const flowLabel = { light: "少量", medium: "中等", heavy: "较多" }[item.flow] || "中等";
+        return `<article class="wellness-period-row" data-period-id="${item.id}">
+          <time datetime="${item.startAt}"><b>${solarDateLabel(item.startAt)}</b><small>${item.endAt ? `至 ${solarDateLabel(item.endAt)} · ${dayDistance(item.startAt, item.endAt) + 1} 天` : "尚未记录结束日期"}</small></time>
+          <span class="wellness-period-flow is-${item.flow}">${flowLabel}</span>
+          <p>${escapeHTML(item.symptoms.length ? item.symptoms.join("、") : "没有记录症状")}${item.note ? ` · ${escapeHTML(item.note)}` : ""}</p>
+          <div><button type="button" data-edit-period="${item.id}" aria-label="编辑这次生理期记录" title="编辑">${icon("pen")}</button><button type="button" data-delete-period="${item.id}" aria-label="删除这次生理期记录" title="删除">${icon("trash")}</button></div>
+        </article>`;
+      }).join("") : `<div class="wellness-empty-state wellness-period-empty">${icon("activity")}<b>先记下最近一次开始日期</b><p>连续记录两个周期后，日迹会算出平均周期并标出预计经期。</p></div>`}
+    </div>
+  </section>`;
+}
+
 function updateAgeDisplay(profile) {
   const calendar = document.querySelector("#life-age-calendar");
   const clock = document.querySelector("#life-age-clock");
@@ -424,11 +795,101 @@ function stopAgeTimer() {
   ageTimer = 0;
 }
 
+function openWellnessDialog(root, { title, html, onMount }) {
+  const previousFocus = document.activeElement;
+  const dialog = document.createElement("dialog");
+  dialog.className = "wellness-dialog";
+  dialog.innerHTML = `<div class="wellness-dialog-card">
+    <header><div><p>DAYLOG · BODY &amp; TIME</p><h2>${escapeHTML(title)}</h2></div><button type="button" class="wellness-dialog-close" data-wellness-close aria-label="关闭">${icon("x")}</button></header>
+    <div class="wellness-dialog-body">${html}</div>
+  </div>`;
+  root.append(dialog);
+  dialog.addEventListener("click", event => {
+    if (event.target === dialog) dialog.close();
+  });
+  dialog.addEventListener("close", () => {
+    dialog.remove();
+    if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+      previousFocus.focus({ preventScroll: true });
+    }
+  });
+  dialog.querySelectorAll("[data-wellness-close]").forEach(button => {
+    button.addEventListener("click", () => dialog.close());
+  });
+  dialog.showModal();
+  onMount?.(dialog);
+  requestAnimationFrame(() => {
+    dialog.querySelector("input:not([type=hidden]), select, textarea, button")?.focus({ preventScroll: true });
+  });
+  return dialog;
+}
+
+function bindCalendarFields(form, initialCalendar, { includeYear = true } = {}) {
+  const preview = form.querySelector("[data-calendar-preview]");
+  const currentCalendar = () => form.querySelector('[data-calendar][aria-pressed="true"]')?.dataset.calendar || "solar";
+  const updatePreview = () => {
+    if (!preview) return;
+    const calendar = currentCalendar();
+    if (calendar === "solar") {
+      const date = new Date(`${form.elements.solarDate?.value || ""}T12:00:00`);
+      preview.textContent = Number.isFinite(date.getTime())
+        ? `公历 ${solarDateLabel(date)}`
+        : "请选择公历日期";
+      preview.classList.toggle("is-error", !Number.isFinite(date.getTime()));
+      return;
+    }
+    const year = includeYear
+      ? Number(form.elements.lunarYear?.value)
+      : (solarToLunar(new Date())?.year || new Date().getFullYear());
+    const month = Number(form.elements.lunarMonth?.value);
+    const day = Number(form.elements.lunarDay?.value);
+    const isLeap = Boolean(form.elements.lunarLeap?.checked);
+    if (includeYear && !year) {
+      preview.textContent = "请选择农历年份";
+      preview.classList.add("is-error");
+      return;
+    }
+    try {
+      const solar = lunarToSolar(year, month, day, isLeap);
+      preview.textContent = solar
+        ? `${lunarDateLabel({ year, month, day, isLeap })} = ${solarDateLabel(solar)}`
+        : "这个农历日期不存在，请检查闰月或日期";
+      preview.classList.toggle("is-error", !solar);
+    } catch {
+      preview.textContent = "请选择有效的农历日期";
+      preview.classList.add("is-error");
+    }
+  };
+  const setCalendar = next => {
+    form.querySelectorAll("[data-calendar]").forEach(button => {
+      button.setAttribute("aria-pressed", String(button.dataset.calendar === next));
+    });
+    form.querySelectorAll("[data-calendar-panel]").forEach(panel => {
+      const active = panel.dataset.calendarPanel === next;
+      panel.hidden = !active;
+      panel.querySelectorAll("input, select").forEach(control => {
+        control.disabled = !active;
+      });
+    });
+    updatePreview();
+  };
+  form.querySelectorAll("[data-calendar]").forEach(button => {
+    button.addEventListener("click", () => setCalendar(button.dataset.calendar));
+  });
+  form.querySelectorAll("[data-calendar-panel] input, [data-calendar-panel] select").forEach(control => {
+    control.addEventListener("change", updatePreview);
+  });
+  setCalendar(initialCalendar);
+}
+
 function renderWellnessPage(root, options = {}) {
   stopAgeTimer();
   const profile = getLifeProfile();
   const weightUnit = getWeightUnit();
   const weights = listWeights();
+  const people = listPeople();
+  const periods = listPeriods();
+  const periodSettings = getPeriodSettings();
   const visibleWeights = weightViewData(weights);
   const summary = weightSummary(weights);
   const age = profile ? ageParts(profile) : null;
@@ -481,14 +942,22 @@ function renderWellnessPage(root, options = {}) {
     const day = index + 1;
     return `<option value="${day}"${lunarBirth.day === day ? " selected" : ""}>${name}</option>`;
   }).join("");
+  const milestones = upcomingMilestones(people, periods, periodSettings);
 
   root.innerHTML = `<div class="life-page wellness-page">
     <header class="life-page-head">
-      <div><p class="life-eyebrow">BODY &amp; TIME</p><h1>身体与时间</h1><p>把体重变化和正在流逝的时间，安静地留在这里。</p></div>
+      <div><p class="life-eyebrow">BODY &amp; TIME</p><h1>身体与时间</h1><p>照看自己的变化，也记住重要的人和日子。</p></div>
       <button class="life-soft-button" type="button" data-life-jump="weight-form">${icon("plus")}记体重</button>
     </header>
+    <nav class="wellness-jump-nav" aria-label="身体与时间页面导航">
+      <button type="button" data-wellness-jump="wellness-self">本人</button>
+      <button type="button" data-wellness-jump="wellness-milestones">提醒</button>
+      <button type="button" data-wellness-jump="wellness-people">重要人物</button>
+      <button type="button" data-wellness-jump="wellness-period">生理期</button>
+      <button type="button" data-wellness-jump="weight-form">体重</button>
+    </nav>
 
-    <section class="life-age-card">
+    <section class="life-age-card" id="wellness-self">
       <div class="life-age-main">
         <span class="life-live-pulse" aria-hidden="true"></span>
         <p class="life-card-kicker">此刻的我</p>
@@ -519,6 +988,26 @@ function renderWellnessPage(root, options = {}) {
         <small>农历生日会换算为对应公历日期，并优先按每年的同名农历日计算下一次生日。若该年没有原来的闰月，按同名普通月；没有三十时按廿九。</small>
       </form>
     </section>
+
+    <section class="life-panel wellness-reminder-panel" id="wellness-milestones">
+      <header class="life-panel-head">
+        <div><p>REMINDER BOOK</p><h2>接下来要记住的日子</h2></div>
+        <span class="life-count-badge">提前提醒 ${people.length ? "已启用" : "待设置"}</span>
+      </header>
+      <p class="wellness-reminder-note">生日、纪念日和预计经期会在这里汇总。打开日迹时，进入提醒窗口的事项会重点显示。</p>
+      ${milestonesMarkup(milestones)}
+    </section>
+
+    <section class="life-panel wellness-people-panel" id="wellness-people">
+      <header class="life-panel-head">
+        <div><p>PEOPLE &amp; MEMORIES</p><h2>重要人物</h2></div>
+        <button type="button" class="life-soft-button" data-add-person>${icon("plus")}添加人物</button>
+      </header>
+      <p class="wellness-section-intro">保存父母、伴侣和孩子的公历或农历生日，再把共同的纪念日放在同一张人物卡里。</p>
+      ${peopleMarkup(people)}
+    </section>
+
+    ${periodSectionMarkup(periods, periodSettings)}
 
     <section class="life-metric-grid" aria-label="体重摘要">
       <article class="life-metric-card is-primary"><span>最新体重</span><strong>${latestWeight}</strong><em>${summary.newest ? escapeHTML(dateTimeLabel(summary.newest.at)) : "等待第一次记录"}</em></article>
@@ -555,6 +1044,184 @@ function renderWellnessPage(root, options = {}) {
   const confirmAction = typeof options.confirmAction === "function"
     ? options.confirmAction
     : (title, body) => Promise.resolve(window.confirm(`${title}\n${body}`));
+
+  const rerender = (focusSelector = "") => {
+    const scrollY = window.scrollY;
+    renderWellnessPage(root, options);
+    if (focusSelector) {
+      requestAnimationFrame(() => root.querySelector(focusSelector)?.focus({ preventScroll: true }));
+    }
+    window.scrollTo({ top: scrollY });
+  };
+
+  const openPersonEditor = person => {
+    const birthCalendar = person?.birthCalendar || "solar";
+    const lunarBirth = person?.lunarBirth || solarToLunar(person?.birthAt) || {
+      year: "",
+      month: 1,
+      day: 1,
+      isLeap: false,
+    };
+    const reminderOptions = Array.from({ length: 31 }, (_, day) => `<option value="${day}"${person?.birthdayReminderDays === day ? " selected" : ""}${!person && day === 7 ? " selected" : ""}>${day === 0 ? "当天提醒" : `提前 ${day} 天`}</option>`).join("");
+    openWellnessDialog(root, {
+      title: person ? `编辑 ${person.name}` : "添加重要人物",
+      html: `<form class="wellness-editor-form" id="wellness-person-form">
+        <div class="wellness-form-grid">
+          <label class="life-field"><span>姓名或称呼</span><input name="name" maxlength="40" required autocomplete="off" value="${escapeHTML(person?.name || "")}" placeholder="例如：妈妈"></label>
+          <label class="life-field"><span>关系</span><select name="relation">${[
+            ["father", "父亲"],
+            ["mother", "母亲"],
+            ["spouse", "配偶"],
+            ["daughter", "女儿"],
+            ["son", "儿子"],
+            ["sibling", "兄弟姐妹"],
+            ["grandparent", "祖辈"],
+            ["other", "其他重要的人"],
+          ].map(([value, label]) => `<option value="${value}"${(person?.relation || "other") === value ? " selected" : ""}>${label}</option>`).join("")}</select></label>
+        </div>
+        <fieldset class="wellness-fieldset">
+          <legend>出生日期</legend>
+          <div class="wellness-calendar-tabs" role="group" aria-label="出生日期历法"><button type="button" data-calendar="solar" aria-pressed="${birthCalendar === "solar"}">公历</button><button type="button" data-calendar="lunar" aria-pressed="${birthCalendar === "lunar"}">农历</button></div>
+          <div data-calendar-panel="solar"${birthCalendar === "solar" ? "" : " hidden"}>
+            <label class="life-field"><span>公历出生日期</span><input name="solarDate" type="date" max="${dateInputValue()}" required value="${person?.birthCalendar === "solar" ? dateInputValue(person.birthAt) : ""}"></label>
+          </div>
+          <div data-calendar-panel="lunar"${birthCalendar === "lunar" ? "" : " hidden"}>
+            ${lunarPickerMarkup(lunarBirth)}
+          </div>
+          <p class="wellness-calendar-preview" data-calendar-preview aria-live="polite"></p>
+        </fieldset>
+        <label class="life-field"><span>生日提前提醒</span><select name="birthdayReminderDays">${reminderOptions}</select></label>
+        <label class="life-field"><span>想记住的事 <small>选填</small></span><textarea name="note" rows="3" maxlength="500" placeholder="喜好、共同经历或想记住的小事"></textarea></label>
+        <div class="wellness-dialog-actions"><button type="button" class="secondary" data-wellness-close>取消</button><button type="submit" class="primary">${icon("check")}${person ? "保存修改" : "添加人物"}</button></div>
+      </form>`,
+      onMount: dialog => {
+        const form = dialog.querySelector("#wellness-person-form");
+        form.elements.note.value = person?.note || "";
+        bindCalendarFields(form, birthCalendar);
+        form.addEventListener("submit", event => {
+          event.preventDefault();
+          try {
+            const calendar = form.querySelector('[data-calendar][aria-pressed="true"]').dataset.calendar;
+            const saved = savePerson({
+              id: person?.id,
+              name: form.elements.name.value,
+              relation: form.elements.relation.value,
+              birthCalendar: calendar,
+              birthAt: isoFromDateInput(form.elements.solarDate.value),
+              lunarBirth: calendar === "lunar" ? {
+                year: Number(form.elements.lunarYear.value),
+                month: Number(form.elements.lunarMonth.value),
+                day: Number(form.elements.lunarDay.value),
+                isLeap: form.elements.lunarLeap.checked,
+              } : null,
+              birthdayReminderDays: Number(form.elements.birthdayReminderDays.value),
+              note: form.elements.note.value,
+            });
+            dialog.close();
+            rerender(`#wellness-person-${saved.id} [data-edit-person]`);
+            notify(`${saved.name}已保存，生日和纪念日会进入提醒簿`);
+          } catch (error) {
+            notify(error instanceof Error ? error.message : "重要人物保存失败");
+          }
+        });
+      },
+    });
+  };
+
+  const openAnniversaryEditor = (person, anniversary) => {
+    const calendar = anniversary?.calendar || "solar";
+    const lunarDate = anniversary?.lunarDate || { month: 1, day: 1, isLeap: false };
+    const reminderOptions = Array.from({ length: 31 }, (_, day) => `<option value="${day}"${anniversary?.reminderDays === day ? " selected" : ""}${!anniversary && day === 7 ? " selected" : ""}>${day === 0 ? "当天提醒" : `提前 ${day} 天`}</option>`).join("");
+    openWellnessDialog(root, {
+      title: anniversary ? `编辑 ${anniversary.title}` : `给 ${person.name} 添加纪念日`,
+      html: `<form class="wellness-editor-form" id="wellness-anniversary-form">
+        <label class="life-field"><span>纪念日名称</span><input name="title" maxlength="40" required autocomplete="off" value="${escapeHTML(anniversary?.title || "")}" placeholder="例如：结婚纪念日"></label>
+        <fieldset class="wellness-fieldset">
+          <legend>日期</legend>
+          <div class="wellness-calendar-tabs" role="group" aria-label="纪念日历法"><button type="button" data-calendar="solar" aria-pressed="${calendar === "solar"}">公历</button><button type="button" data-calendar="lunar" aria-pressed="${calendar === "lunar"}">农历</button></div>
+          <div data-calendar-panel="solar"${calendar === "solar" ? "" : " hidden"}>
+            <label class="life-field"><span>公历日期</span><input name="solarDate" type="date" required value="${anniversary?.calendar === "solar" ? dateInputValue(anniversary.solarAt) : ""}"></label>
+          </div>
+          <div data-calendar-panel="lunar"${calendar === "lunar" ? "" : " hidden"}>
+            ${lunarPickerMarkup({ ...lunarDate, includeYear: false })}
+          </div>
+          <p class="wellness-calendar-preview" data-calendar-preview aria-live="polite"></p>
+        </fieldset>
+        <label class="life-field"><span>提前提醒</span><select name="reminderDays">${reminderOptions}</select></label>
+        <label class="life-field"><span>说明 <small>选填</small></span><textarea name="note" rows="3" maxlength="300" placeholder="这一年发生了什么，或当天想做什么"></textarea></label>
+        <div class="wellness-dialog-actions"><button type="button" class="secondary" data-wellness-close>取消</button><button type="submit" class="primary">${icon("check")}${anniversary ? "保存修改" : "添加纪念日"}</button></div>
+      </form>`,
+      onMount: dialog => {
+        const form = dialog.querySelector("#wellness-anniversary-form");
+        form.elements.note.value = anniversary?.note || "";
+        bindCalendarFields(form, calendar, { includeYear: false });
+        form.addEventListener("submit", event => {
+          event.preventDefault();
+          try {
+            const selectedCalendar = form.querySelector('[data-calendar][aria-pressed="true"]').dataset.calendar;
+            saveAnniversary(person.id, {
+              id: anniversary?.id,
+              title: form.elements.title.value,
+              calendar: selectedCalendar,
+              solarAt: isoFromDateInput(form.elements.solarDate.value),
+              lunarDate: selectedCalendar === "lunar" ? {
+                month: Number(form.elements.lunarMonth.value),
+                day: Number(form.elements.lunarDay.value),
+                isLeap: form.elements.lunarLeap.checked,
+              } : null,
+              reminderDays: Number(form.elements.reminderDays.value),
+              note: form.elements.note.value,
+            });
+            dialog.close();
+            rerender(`#wellness-person-${person.id} [data-edit-person]`);
+            notify("纪念日已保存，并加入提醒簿");
+          } catch (error) {
+            notify(error instanceof Error ? error.message : "纪念日保存失败");
+          }
+        });
+      },
+    });
+  };
+
+  const openPeriodEditor = period => {
+    const selectedSymptoms = new Set(period?.symptoms || []);
+    const symptoms = ["腹痛", "腰酸", "头痛", "乏力", "情绪波动", "乳房胀痛", "恶心"];
+    openWellnessDialog(root, {
+      title: period ? "编辑生理期记录" : "记录一次生理期",
+      html: `<form class="wellness-editor-form" id="wellness-period-form">
+        <div class="wellness-form-grid">
+          <label class="life-field"><span>开始日期</span><input name="startDate" type="date" required value="${period ? dateInputValue(period.startAt) : dateInputValue()}"></label>
+          <label class="life-field"><span>结束日期 <small>未结束可留空</small></span><input name="endDate" type="date" value="${period?.endAt ? dateInputValue(period.endAt) : ""}"></label>
+        </div>
+        <label class="life-field"><span>经量</span><select name="flow"><option value="light"${period?.flow === "light" ? " selected" : ""}>少量</option><option value="medium"${!period || period.flow === "medium" ? " selected" : ""}>中等</option><option value="heavy"${period?.flow === "heavy" ? " selected" : ""}>较多</option></select></label>
+        <fieldset class="wellness-fieldset wellness-symptom-fieldset"><legend>症状 <small>可多选</small></legend><div class="wellness-symptom-grid">${symptoms.map(symptom => `<label><input name="symptoms" type="checkbox" value="${symptom}"${selectedSymptoms.has(symptom) ? " checked" : ""}><span>${symptom}</span></label>`).join("")}</div></fieldset>
+        <label class="life-field"><span>备注 <small>选填</small></span><textarea name="note" rows="3" maxlength="500" placeholder="睡眠、用药或其他身体感受">${escapeHTML(period?.note || "")}</textarea></label>
+        <div class="wellness-dialog-actions"><button type="button" class="secondary" data-wellness-close>取消</button><button type="submit" class="primary">${icon("check")}${period ? "保存修改" : "保存记录"}</button></div>
+      </form>`,
+      onMount: dialog => {
+        const form = dialog.querySelector("#wellness-period-form");
+        form.addEventListener("submit", event => {
+          event.preventDefault();
+          try {
+            const saved = savePeriod({
+              id: period?.id,
+              startAt: isoFromDateInput(form.elements.startDate.value),
+              endAt: isoFromDateInput(form.elements.endDate.value),
+              flow: form.elements.flow.value,
+              symptoms: new FormData(form).getAll("symptoms"),
+              note: form.elements.note.value,
+            });
+            periodCalendarMonth = monthStart(new Date(saved.startAt));
+            dialog.close();
+            rerender("[data-add-period]");
+            notify("生理期记录已保存，周期预测已更新");
+          } catch (error) {
+            notify(error instanceof Error ? error.message : "生理期记录保存失败");
+          }
+        });
+      },
+    });
+  };
 
   const profileForm = root.querySelector("#life-profile-form");
   const lunarPreview = profileForm.querySelector("[data-lunar-preview]");
@@ -696,6 +1363,131 @@ function renderWellnessPage(root, options = {}) {
       } catch {
         notify("删除失败，请稍后重试");
       }
+    });
+  });
+
+  root.querySelectorAll("[data-add-person]").forEach(button => {
+    button.addEventListener("click", () => openPersonEditor(null));
+  });
+
+  root.querySelectorAll("[data-edit-person]").forEach(button => {
+    button.addEventListener("click", () => {
+      const person = listPeople().find(item => item.id === button.dataset.editPerson);
+      if (person) openPersonEditor(person);
+    });
+  });
+
+  root.querySelectorAll("[data-delete-person]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const person = listPeople().find(item => item.id === button.dataset.deletePerson);
+      if (!person) return;
+      const confirmed = await confirmAction(
+        `删除 ${person.name}？`,
+        `这也会删除人物卡中的 ${person.anniversaries.length} 个纪念日和提醒设置。`,
+      );
+      if (!confirmed) return;
+      deletePerson(person.id);
+      rerender("[data-add-person]");
+      notify(`${person.name}的人物卡已删除`);
+    });
+  });
+
+  root.querySelectorAll("[data-add-anniversary]").forEach(button => {
+    button.addEventListener("click", () => {
+      const person = listPeople().find(item => item.id === button.dataset.addAnniversary);
+      if (person) openAnniversaryEditor(person, null);
+    });
+  });
+
+  root.querySelectorAll("[data-edit-anniversary]").forEach(button => {
+    button.addEventListener("click", () => {
+      const person = listPeople().find(item => item.id === button.dataset.personId);
+      const anniversary = person?.anniversaries.find(item => item.id === button.dataset.editAnniversary);
+      if (person && anniversary) openAnniversaryEditor(person, anniversary);
+    });
+  });
+
+  root.querySelectorAll("[data-delete-anniversary]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const person = listPeople().find(item => item.id === button.dataset.personId);
+      const anniversary = person?.anniversaries.find(item => item.id === button.dataset.deleteAnniversary);
+      if (!person || !anniversary) return;
+      const confirmed = await confirmAction(
+        `删除“${anniversary.title}”？`,
+        "之后不会再出现在提醒簿里，人物生日不受影响。",
+      );
+      if (!confirmed) return;
+      deleteAnniversary(person.id, anniversary.id);
+      rerender(`#wellness-person-${person.id} [data-edit-person]`);
+      notify("纪念日已删除");
+    });
+  });
+
+  root.querySelectorAll("[data-add-period]").forEach(button => {
+    button.addEventListener("click", () => openPeriodEditor(null));
+  });
+
+  root.querySelectorAll("[data-edit-period]").forEach(button => {
+    button.addEventListener("click", () => {
+      const period = listPeriods().find(item => item.id === button.dataset.editPeriod);
+      if (period) openPeriodEditor(period);
+    });
+  });
+
+  root.querySelectorAll("[data-delete-period]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const period = listPeriods().find(item => item.id === button.dataset.deletePeriod);
+      if (!period) return;
+      const confirmed = await confirmAction(
+        "删除这次生理期记录？",
+        `${solarDateLabel(period.startAt)} 开始的周期会被删除，平均周期和预计日期会重新计算。`,
+      );
+      if (!confirmed) return;
+      deletePeriod(period.id);
+      rerender("[data-add-period]");
+      notify("生理期记录已删除");
+    });
+  });
+
+  root.querySelectorAll("[data-period-month]").forEach(button => {
+    button.addEventListener("click", () => {
+      const amount = Number(button.dataset.periodMonth);
+      periodCalendarMonth = amount === 0
+        ? monthStart(new Date())
+        : shiftMonth(periodCalendarMonth, amount);
+      const scrollY = window.scrollY;
+      renderWellnessPage(root, options);
+      window.scrollTo({ top: scrollY });
+      root.querySelector(`[data-period-month="${amount}"]`)?.focus({ preventScroll: true });
+    });
+  });
+
+  root.querySelector("[data-period-reminder]")?.addEventListener("change", event => {
+    const reminderDays = Number(event.currentTarget.value);
+    savePeriodSettings({ reminderDays });
+    notify(`预计经期会提前 ${reminderDays} 天提醒`);
+    const scrollY = window.scrollY;
+    renderWellnessPage(root, options);
+    window.scrollTo({ top: scrollY });
+    root.querySelector("[data-period-reminder]")?.focus({ preventScroll: true });
+  });
+
+  root.querySelectorAll("[data-wellness-jump]").forEach(button => {
+    button.addEventListener("click", () => {
+      const target = root.querySelector(`#${button.dataset.wellnessJump}`);
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
+      requestAnimationFrame(() => target?.focus?.({ preventScroll: true }));
+    });
+  });
+
+  root.querySelectorAll("[data-reminder-target]").forEach(button => {
+    button.addEventListener("click", () => {
+      const value = button.dataset.reminderTarget;
+      const target = value === "period"
+        ? root.querySelector("#wellness-period")
+        : root.querySelector(`#wellness-person-${CSS.escape(value.replace(/^person:/, ""))}`);
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      target?.focus?.({ preventScroll: true });
     });
   });
 
