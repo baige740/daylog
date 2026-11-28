@@ -5,13 +5,19 @@ import {
   deleteQuickLedger,
   deleteWeight,
   getLifeProfile,
+  getWeightUnit,
   listLedger,
   listQuickLedger,
   listWeights,
+  lunarDateLabel,
+  lunarToSolar,
   saveLedger,
   saveLifeProfile,
   saveQuickLedger,
   saveWeight,
+  saveWeightUnit,
+  solarToLunar,
+  weightUnitFactor,
 } from "./life-data.js";
 
 const ACCOUNTS = ["微信", "支付宝", "银行卡", "现金", "证券账户", "其他"];
@@ -20,6 +26,12 @@ const WEIGHT_RANGES = [
   [30, "近 30 天"],
   [0, "全部"],
 ];
+const LUNAR_MONTHS = ["正月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "腊月"];
+const LUNAR_DAYS = Array.from({ length: 30 }, (_, index) => [
+  "初一", "初二", "初三", "初四", "初五", "初六", "初七", "初八", "初九", "初十",
+  "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十",
+  "廿一", "廿二", "廿三", "廿四", "廿五", "廿六", "廿七", "廿八", "廿九", "三十",
+][index]);
 
 let ageTimer = 0;
 let weightRange = 30;
@@ -114,7 +126,22 @@ function addMonthsClamped(value, months) {
   return date;
 }
 
-function ageParts(birthValue, nowValue = new Date()) {
+function startOfLocalDay(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function solarDateLabel(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  return date.toLocaleDateString("zh-CN", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+function agePartsForDate(birthValue, nowValue = new Date()) {
   const birth = new Date(birthValue);
   const now = nowValue instanceof Date ? nowValue : new Date(nowValue);
   if (!Number.isFinite(birth.getTime()) || birth > now) return null;
@@ -141,7 +168,73 @@ function ageParts(birthValue, nowValue = new Date()) {
   return { years, months, days, hours, minutes, seconds };
 }
 
-function nextBirthday(birthValue, nowValue = new Date()) {
+function resolveLunarOccurrence(year, lunarBirth) {
+  const candidates = [];
+  const month = Number(lunarBirth.month);
+  const day = Number(lunarBirth.day);
+  if (lunarBirth.isLeap) {
+    candidates.push({ month, day, isLeap: true, adjustedDay: false });
+    if (day === 30) candidates.push({ month, day: 29, isLeap: true, adjustedDay: true });
+    candidates.push({ month, day, isLeap: false, adjustedMonth: true, adjustedDay: false });
+    if (day === 30) {
+      candidates.push({ month, day: 29, isLeap: false, adjustedMonth: true, adjustedDay: true });
+    }
+  } else {
+    candidates.push({ month, day, isLeap: false, adjustedDay: false });
+    if (day === 30) candidates.push({ month, day: 29, isLeap: false, adjustedDay: true });
+  }
+  for (const candidate of candidates) {
+    const date = lunarToSolar(year, candidate.month, candidate.day, candidate.isLeap);
+    if (date) return { year, date, ...candidate };
+  }
+  return null;
+}
+
+function latestLunarBirthday(profile, nowValue = new Date()) {
+  const lunarBirth = profile?.lunarBirth;
+  const now = nowValue instanceof Date ? nowValue : new Date(nowValue);
+  const currentLunar = profile?.birthCalendar === "lunar"
+    ? solarToLunar(now)
+    : null;
+  if (!lunarBirth || !currentLunar || currentLunar.year < lunarBirth.year) return null;
+  for (let year = currentLunar.year; year >= lunarBirth.year; year -= 1) {
+    const occurrence = resolveLunarOccurrence(year, lunarBirth);
+    if (occurrence?.date && occurrence.date <= now) return occurrence;
+  }
+  return null;
+}
+
+function lunarAgeParts(profile, nowValue = new Date()) {
+  const now = nowValue instanceof Date ? nowValue : new Date(nowValue);
+  const latest = latestLunarBirthday(profile, now);
+  if (!latest) return null;
+  const years = latest.year - profile.lunarBirth.year;
+  let months = 0;
+  while (months < 11) {
+    const next = addMonthsClamped(latest.date, months + 1);
+    if (next > now) break;
+    months += 1;
+  }
+  const monthAnchor = addMonthsClamped(latest.date, months);
+  const remaining = Math.max(0, now.getTime() - monthAnchor.getTime());
+  return {
+    years,
+    months,
+    days: Math.floor(remaining / 86400000),
+    hours: Math.floor((remaining % 86400000) / 3600000),
+    minutes: Math.floor((remaining % 3600000) / 60000),
+    seconds: Math.floor((remaining % 60000) / 1000),
+  };
+}
+
+function ageParts(profile, nowValue = new Date()) {
+  if (!profile) return null;
+  return profile.birthCalendar === "lunar"
+    ? lunarAgeParts(profile, nowValue)
+    : agePartsForDate(profile.birthAt, nowValue);
+}
+
+function nextSolarBirthday(birthValue, nowValue = new Date()) {
   const birth = new Date(birthValue);
   const now = nowValue instanceof Date ? nowValue : new Date(nowValue);
   let next = addYearsClamped(birth, now.getFullYear() - birth.getFullYear());
@@ -154,6 +247,30 @@ function nextBirthday(birthValue, nowValue = new Date()) {
     minutes: Math.floor((remaining % 3600000) / 60000),
     seconds: Math.floor((remaining % 60000) / 1000),
   };
+}
+
+function nextLunarBirthday(profile, nowValue = new Date()) {
+  const now = nowValue instanceof Date ? nowValue : new Date(nowValue);
+  const today = startOfLocalDay(now);
+  const currentLunar = solarToLunar(now);
+  if (!currentLunar || profile?.birthCalendar !== "lunar") return null;
+  for (let year = currentLunar.year; year <= 2100; year += 1) {
+    const occurrence = resolveLunarOccurrence(year, profile.lunarBirth);
+    if (!occurrence?.date) continue;
+    const birthday = startOfLocalDay(occurrence.date);
+    if (birthday < today) continue;
+    const days = Math.round((birthday.getTime() - today.getTime()) / 86400000);
+    const fallback = [];
+    if (occurrence.adjustedMonth) fallback.push("今年没有这个闰月，按同名普通月");
+    if (occurrence.adjustedDay) fallback.push("这个月没有三十，按廿九");
+    return {
+      date: occurrence.date,
+      year,
+      days,
+      fallback: fallback.join("；"),
+    };
+  }
+  return null;
 }
 
 function weightViewData(items) {
@@ -173,11 +290,24 @@ function weightSummary(items) {
   };
 }
 
-function deltaMarkup(value, suffix = " kg") {
+function weightUnitName(unit) {
+  return unit === "jin" ? "斤" : "公斤";
+}
+
+function weightToDisplay(kg, unit) {
+  return Number(kg) * weightUnitFactor(unit);
+}
+
+function weightDisplayText(kg, unit) {
+  return weightToDisplay(kg, unit).toFixed(2);
+}
+
+function deltaMarkup(value, unit) {
   if (value === null) return '<span class="life-delta is-neutral">等待下一次记录</span>';
-  if (Math.abs(value) < 0.05) return '<span class="life-delta is-neutral">与上次持平</span>';
-  const direction = value > 0 ? "增加" : "减少";
-  return `<span class="life-delta ${value > 0 ? "is-up" : "is-down"}">${direction} ${Math.abs(value).toFixed(1)}${suffix}</span>`;
+  const shown = weightToDisplay(value, unit);
+  if (Math.abs(shown) < 0.005) return '<span class="life-delta is-neutral">与上次持平</span>';
+  const direction = shown > 0 ? "增加" : "减少";
+  return `<span class="life-delta ${shown > 0 ? "is-up" : "is-down"}">${direction} ${Math.abs(shown).toFixed(2)} ${weightUnitName(unit)}</span>`;
 }
 
 function smoothPath(points) {
@@ -198,7 +328,7 @@ function smoothPath(points) {
   return path;
 }
 
-function weightChartMarkup(items) {
+function weightChartMarkup(items, unit) {
   if (!items.length) {
     return '<div class="life-empty-chart"><span>' + icon("activity") + '</span><b>还没有这一时段的体重</b><p>记下第一次体重，曲线会从这里开始。</p></div>';
   }
@@ -209,7 +339,7 @@ function weightChartMarkup(items) {
   const rightPad = 20;
   const topPad = 24;
   const bottomPad = 38;
-  const values = sorted.map(item => item.kg);
+  const values = sorted.map(item => weightToDisplay(item.kg, unit));
   let minimum = Math.min(...values);
   let maximum = Math.max(...values);
   if (minimum === maximum) {
@@ -224,7 +354,7 @@ function weightChartMarkup(items) {
     ? width / 2
     : leftPad + index * ((width - leftPad - rightPad) / (sorted.length - 1));
   const y = value => topPad + ((maximum - value) / (maximum - minimum)) * (height - topPad - bottomPad);
-  const points = sorted.map((item, index) => [x(index), y(item.kg)]);
+  const points = values.map((value, index) => [x(index), y(value)]);
   const line = smoothPath(points);
   const area = points.length > 1
     ? `${line} L ${points.at(-1)[0]} ${height - bottomPad} L ${points[0][0]} ${height - bottomPad} Z`
@@ -232,7 +362,7 @@ function weightChartMarkup(items) {
   const gridLines = [0, 0.5, 1].map(ratio => {
     const yPosition = topPad + ratio * (height - topPad - bottomPad);
     const label = maximum - ratio * (maximum - minimum);
-    return `<line x1="${leftPad}" y1="${yPosition}" x2="${width - rightPad}" y2="${yPosition}"></line><text x="${leftPad - 9}" y="${yPosition + 4}" text-anchor="end">${label.toFixed(1)}</text>`;
+    return `<line x1="${leftPad}" y1="${yPosition}" x2="${width - rightPad}" y2="${yPosition}"></line><text x="${leftPad - 9}" y="${yPosition + 4}" text-anchor="end">${label.toFixed(2)}</text>`;
   }).join("");
   const labelIndexes = [...new Set([0, Math.floor((sorted.length - 1) / 2), sorted.length - 1])];
   const dateLabels = labelIndexes.map(index => {
@@ -241,7 +371,7 @@ function weightChartMarkup(items) {
     return `<text x="${x(index)}" y="${height - 12}" text-anchor="${index === 0 ? "start" : index === sorted.length - 1 ? "end" : "middle"}">${label}</text>`;
   }).join("");
   const circles = sorted.map((item, index) =>
-    `<circle class="weight-dot" cx="${points[index][0]}" cy="${points[index][1]}" r="4.5"><title>${escapeHTML(dateTimeLabel(item.at))} · ${item.kg.toFixed(1)} kg</title></circle>`,
+    `<circle class="weight-dot" cx="${points[index][0]}" cy="${points[index][1]}" r="4.5"><title>${escapeHTML(dateTimeLabel(item.at))} · ${weightDisplayText(item.kg, unit)} ${weightUnitName(unit)}</title></circle>`,
   ).join("");
   return `<svg class="weight-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="体重变化曲线，共 ${items.length} 次记录">
     <defs><linearGradient id="weight-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2e8062" stop-opacity=".23"></stop><stop offset="1" stop-color="#2e8062" stop-opacity=".01"></stop></linearGradient></defs>
@@ -253,11 +383,21 @@ function weightChartMarkup(items) {
   </svg>`;
 }
 
-function birthdayText(birthAt) {
-  const next = nextBirthday(birthAt);
+function birthdayText(profile, nowValue = new Date()) {
+  if (profile.birthCalendar === "lunar") {
+    const next = nextLunarBirthday(profile, nowValue);
+    if (!next) return { date: "暂时无法计算", countdown: "请检查农历生日" };
+    return {
+      date: `${solarDateLabel(next.date)} · ${lunarDateLabel(profile.lunarBirth)}`,
+      countdown: next.days === 0 ? "就是今天" : `还有 ${next.days} 天`,
+      fallback: next.fallback,
+    };
+  }
+  const next = nextSolarBirthday(profile.birthAt, nowValue);
   return {
-    date: next.date.toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "short" }),
+    date: `${next.date.toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "short" })} · 公历`,
     countdown: `${next.days} 天 ${pad(next.hours)}:${pad(next.minutes)}:${pad(next.seconds)}`,
+    fallback: "",
   };
 }
 
@@ -266,7 +406,7 @@ function updateAgeDisplay(profile) {
   const clock = document.querySelector("#life-age-clock");
   const birthday = document.querySelector("#life-birthday-countdown");
   if (!profile || !calendar || !clock || !birthday) return;
-  const parts = ageParts(profile.birthAt);
+  const parts = ageParts(profile);
   if (!parts) {
     calendar.textContent = "出生时间晚于此刻";
     clock.textContent = "00:00:00";
@@ -275,8 +415,8 @@ function updateAgeDisplay(profile) {
   }
   calendar.textContent = `${parts.years} 年 ${parts.months} 个月 ${parts.days} 天`;
   clock.textContent = `${pad(parts.hours)}:${pad(parts.minutes)}:${pad(parts.seconds)}`;
-  const next = birthdayText(profile.birthAt);
-  birthday.textContent = `${next.date} · ${next.countdown}`;
+  const next = birthdayText(profile);
+  birthday.textContent = `${next.date} · ${next.countdown}${next.fallback ? ` · ${next.fallback}` : ""}`;
 }
 
 function stopAgeTimer() {
@@ -287,17 +427,60 @@ function stopAgeTimer() {
 function renderWellnessPage(root, options = {}) {
   stopAgeTimer();
   const profile = getLifeProfile();
+  const weightUnit = getWeightUnit();
   const weights = listWeights();
   const visibleWeights = weightViewData(weights);
   const summary = weightSummary(weights);
-  const age = profile ? ageParts(profile.birthAt) : null;
-  const birthday = profile ? birthdayText(profile.birthAt) : null;
+  const age = profile ? ageParts(profile) : null;
+  const birthday = profile ? birthdayText(profile) : null;
+  const currentYear = new Date().getFullYear();
+  const birthCalendar = profile?.birthCalendar === "lunar" ? "lunar" : "solar";
+  const convertedLunarBirth = profile ? solarToLunar(profile.birthAt) : null;
+  const lunarBirth = profile?.lunarBirth || convertedLunarBirth || {
+    year: null,
+    month: 1,
+    day: 1,
+    isLeap: false,
+  };
+  const selectedLunarYear = Number(lunarBirth.year) || 0;
   const ageCalendar = age
     ? `${age.years} 年 ${age.months} 个月 ${age.days} 天`
     : "还没有设置出生时间";
   const ageClock = age
     ? `${pad(age.hours)}:${pad(age.minutes)}:${pad(age.seconds)}`
     : "—";
+  const birthdayLabel = birthday
+    ? `${birthday.date} · ${birthday.countdown}${birthday.fallback ? ` · ${birthday.fallback}` : ""}`
+    : "设置出生日期后显示";
+  const unitName = weightUnitName(weightUnit);
+  const unitLabel = weightUnit === "jin" ? "斤" : "kg";
+  const weightMinimum = weightUnit === "jin" ? 40 : 20;
+  const weightMaximum = weightUnit === "jin" ? 1000 : 500;
+  const weightPlaceholder = weightUnit === "jin" ? "例如 130.50" : "例如 65.25";
+  const latestWeight = summary.newest
+    ? `${weightDisplayText(summary.newest.kg, weightUnit)} <small>${unitLabel}</small>`
+    : "—";
+  const changeWeight = summary.change === null
+    ? "—"
+    : `${summary.change > 0 ? "+" : ""}${weightDisplayText(summary.change, weightUnit)} <small>${unitLabel}</small>`;
+  const totalWeight = summary.total === null
+    ? "—"
+    : `${summary.total > 0 ? "+" : ""}${weightDisplayText(summary.total, weightUnit)} <small>${unitLabel}</small>`;
+  const lunarYearOptions = Array.from(
+    { length: currentYear - 1899 },
+    (_, index) => currentYear - index,
+  ).map(year => `<option value="${year}"${selectedLunarYear === year ? " selected" : ""}>${year} 年</option>`).join("");
+  const lunarYearPlaceholder = selectedLunarYear
+    ? ""
+    : '<option value="" selected disabled>选择年份</option>';
+  const lunarMonthOptions = LUNAR_MONTHS.map((name, index) => {
+    const month = index + 1;
+    return `<option value="${month}"${lunarBirth.month === month ? " selected" : ""}>${name}</option>`;
+  }).join("");
+  const lunarDayOptions = LUNAR_DAYS.map((name, index) => {
+    const day = index + 1;
+    return `<option value="${day}"${lunarBirth.day === day ? " selected" : ""}>${name}</option>`;
+  }).join("");
 
   root.innerHTML = `<div class="life-page wellness-page">
     <header class="life-page-head">
@@ -311,41 +494,58 @@ function renderWellnessPage(root, options = {}) {
         <p class="life-card-kicker">此刻的我</p>
         <strong id="life-age-calendar">${escapeHTML(ageCalendar)}</strong>
         <div class="life-age-clock-row"><span>加上</span><b id="life-age-clock">${escapeHTML(ageClock)}</b></div>
-        <p class="life-birthday-line">下次生日 <span id="life-birthday-countdown">${birthday ? escapeHTML(`${birthday.date} · ${birthday.countdown}`) : "设置出生日期后显示"}</span></p>
+        <p class="life-birthday-line">下次生日 <span id="life-birthday-countdown">${escapeHTML(birthdayLabel)}</span></p>
       </div>
       <form class="life-birth-form" id="life-profile-form">
-        <label for="life-birth-at">出生日期与时间</label>
-        <input id="life-birth-at" name="birthAt" type="datetime-local" step="1" required value="${profile ? escapeHTML(localDateTimeValue(profile.birthAt)) : ""}">
-        <button class="primary" type="submit">${icon("clock")}${profile ? "更新出生时间" : "保存出生时间"}</button>
-        <small>保存后会按年月日、时分秒实时更新。</small>
+        <div class="life-calendar-switch" role="group" aria-label="出生日期历法">
+          <button type="button" data-birth-calendar="solar" aria-pressed="${birthCalendar === "solar"}">公历</button>
+          <button type="button" data-birth-calendar="lunar" aria-pressed="${birthCalendar === "lunar"}">农历</button>
+        </div>
+        <div class="life-birth-panel" data-birth-panel="solar"${birthCalendar === "solar" ? "" : " hidden"}>
+          <label for="life-birth-at">公历出生日期与时间</label>
+          <input class="life-birth-control" id="life-birth-at" name="birthAt" type="datetime-local" step="1" required value="${profile ? escapeHTML(localDateTimeValue(profile.birthAt)) : ""}"${birthCalendar === "solar" ? "" : " disabled"}>
+        </div>
+        <div class="life-birth-panel" data-birth-panel="lunar"${birthCalendar === "lunar" ? "" : " hidden"}>
+          <p class="life-birth-panel-title">农历出生年月日</p>
+          <div class="life-lunar-fields">
+            <label><span>年</span><select name="lunarYear" required${birthCalendar === "lunar" ? "" : " disabled"}>${lunarYearPlaceholder}${lunarYearOptions}</select></label>
+            <label><span>月</span><select name="lunarMonth"${birthCalendar === "lunar" ? "" : " disabled"}>${lunarMonthOptions}</select></label>
+            <label><span>日</span><select name="lunarDay"${birthCalendar === "lunar" ? "" : " disabled"}>${lunarDayOptions}</select></label>
+          </div>
+          <label class="life-leap-toggle"><input name="lunarLeap" type="checkbox"${lunarBirth.isLeap ? " checked" : ""}${birthCalendar === "lunar" ? "" : " disabled"}><span>这个生日是闰月</span></label>
+          <p class="life-lunar-preview" data-lunar-preview aria-live="polite"></p>
+        </div>
+        <button class="primary life-birth-save" type="submit">${icon("clock")}${profile ? "更新生日" : "保存生日"}</button>
+        <small>农历生日会换算为对应公历日期，并优先按每年的同名农历日计算下一次生日。若该年没有原来的闰月，按同名普通月；没有三十时按廿九。</small>
       </form>
     </section>
 
     <section class="life-metric-grid" aria-label="体重摘要">
-      <article class="life-metric-card is-primary"><span>最新体重</span><strong>${summary.newest ? summary.newest.kg.toFixed(1) + " <small>kg</small>" : "—"}</strong><em>${summary.newest ? escapeHTML(dateTimeLabel(summary.newest.at)) : "等待第一次记录"}</em></article>
-      <article class="life-metric-card"><span>较上次</span><strong>${summary.change === null ? "—" : (summary.change > 0 ? "+" : "") + summary.change.toFixed(1) + " <small>kg</small>"}</strong><em>${deltaMarkup(summary.change)}</em></article>
-      <article class="life-metric-card"><span>累计变化</span><strong>${summary.total === null ? "—" : (summary.total > 0 ? "+" : "") + summary.total.toFixed(1) + " <small>kg</small>"}</strong><em>${summary.total === null ? "至少需要两次记录" : summary.total > 0 ? "从最早记录至今增加" : "从最早记录至今减少"}</em></article>
+      <article class="life-metric-card is-primary"><span>最新体重</span><strong>${latestWeight}</strong><em>${summary.newest ? escapeHTML(dateTimeLabel(summary.newest.at)) : "等待第一次记录"}</em></article>
+      <article class="life-metric-card"><span>较上次</span><strong>${changeWeight}</strong><em>${deltaMarkup(summary.change, weightUnit)}</em></article>
+      <article class="life-metric-card"><span>累计变化</span><strong>${totalWeight}</strong><em>${summary.total === null ? "至少需要两次记录" : summary.total > 0 ? "从最早记录至今增加" : "从最早记录至今减少"}</em></article>
     </section>
 
     <div class="life-content-grid">
       <section class="life-panel life-chart-panel">
         <header class="life-panel-head"><div><p>WEIGHT TREND</p><h2>体重变化</h2></div><div class="life-range-tabs" role="group" aria-label="体重曲线时间范围">${WEIGHT_RANGES.map(([days, label]) => `<button type="button" data-weight-range="${days}" aria-pressed="${weightRange === days}">${label}</button>`).join("")}</div></header>
-        ${weightChartMarkup(visibleWeights)}
-        <footer class="life-chart-foot"><span>${visibleWeights.length ? `这一时期共 ${visibleWeights.length} 次记录` : "曲线会随每次记录自动更新"}</span><span>单位 · 公斤</span></footer>
+        ${weightChartMarkup(visibleWeights, weightUnit)}
+        <footer class="life-chart-foot"><span>${visibleWeights.length ? `这一时期共 ${visibleWeights.length} 次记录` : "曲线会随每次记录自动更新"}</span><span>当前单位 · ${unitName}</span></footer>
       </section>
 
       <form class="life-panel life-weight-form" id="weight-form">
-        <header class="life-panel-head"><div><p>NEW CHECK-IN</p><h2>记一次体重</h2></div><span class="life-form-icon">${icon("activity")}</span></header>
+        <header class="life-panel-head"><div><p>NEW CHECK-IN</p><h2>记一次体重</h2></div><div class="life-weight-head-actions"><div class="life-unit-switch" role="group" aria-label="体重显示和录入单位"><button type="button" data-weight-unit="kg" aria-pressed="${weightUnit === "kg"}">公斤</button><button type="button" data-weight-unit="jin" aria-pressed="${weightUnit === "jin"}">斤</button></div><span class="life-form-icon">${icon("activity")}</span></div></header>
         <label class="life-field"><span>记录时间</span><input name="at" type="datetime-local" step="1" required value="${escapeHTML(localDateTimeValue())}"></label>
-        <label class="life-field"><span>体重（公斤）</span><div class="life-number-field"><input name="kg" type="number" min="20" max="500" step="0.1" inputmode="decimal" required placeholder="例如 65.5"><b>kg</b></div></label>
+        <label class="life-field"><span>体重（${unitName}）</span><div class="life-number-field"><input name="weight" type="number" min="${weightMinimum}" max="${weightMaximum}" step="0.01" inputmode="decimal" required placeholder="${weightPlaceholder}"><b>${unitLabel}</b></div></label>
         <label class="life-field"><span>备注 <small>选填</small></span><input name="note" maxlength="300" placeholder="晨起、运动后或其他状态"></label>
         <button class="primary life-wide-button" type="submit">${icon("plus")}保存体重</button>
+        <p class="life-weight-storage-note">支持两位小数；切换单位不会改动已有记录。</p>
       </form>
     </div>
 
     <section class="life-panel life-history-panel">
       <header class="life-panel-head"><div><p>HISTORY</p><h2>体重记录</h2></div><span class="life-count-badge">${weights.length} 次</span></header>
-      <div class="life-weight-list">${weights.length ? weights.map(item => `<article class="life-weight-row" data-weight-id="${item.id}"><time datetime="${item.at}">${escapeHTML(dateTimeLabel(item.at))}</time><strong>${item.kg.toFixed(1)} <small>kg</small></strong><p>${escapeHTML(item.note || "没有备注")}</p><button type="button" class="life-icon-button" data-delete-weight="${item.id}" aria-label="删除 ${item.kg.toFixed(1)} 公斤记录" title="删除">${icon("trash")}</button></article>`).join("") : '<div class="life-empty-row">还没有体重记录。第一次记录后，趋势和变化会从这里开始。</div>'}</div>
+      <div class="life-weight-list">${weights.length ? weights.map(item => `<article class="life-weight-row" data-weight-id="${item.id}"><time datetime="${item.at}">${escapeHTML(dateTimeLabel(item.at))}</time><strong>${weightDisplayText(item.kg, weightUnit)} <small>${unitLabel}</small></strong><p>${escapeHTML(item.note || "没有备注")}</p><button type="button" class="life-icon-button" data-delete-weight="${item.id}" aria-label="删除 ${weightDisplayText(item.kg, weightUnit)} ${unitName}记录" title="删除">${icon("trash")}</button></article>`).join("") : '<div class="life-empty-row">还没有体重记录。第一次记录后，趋势和变化会从这里开始。</div>'}</div>
     </section>
   </div>`;
 
@@ -356,16 +556,98 @@ function renderWellnessPage(root, options = {}) {
     ? options.confirmAction
     : (title, body) => Promise.resolve(window.confirm(`${title}\n${body}`));
 
-  root.querySelector("#life-profile-form").addEventListener("submit", event => {
-    event.preventDefault();
-    const value = new FormData(event.currentTarget).get("birthAt");
+  const profileForm = root.querySelector("#life-profile-form");
+  const lunarPreview = profileForm.querySelector("[data-lunar-preview]");
+
+  const updateLunarPreview = () => {
+    const year = Number(profileForm.elements.lunarYear.value);
+    const month = Number(profileForm.elements.lunarMonth.value);
+    const day = Number(profileForm.elements.lunarDay.value);
+    const isLeap = profileForm.elements.lunarLeap.checked;
+    if (!year) {
+      lunarPreview.textContent = "请选择农历出生年份";
+      lunarPreview.classList.add("is-error");
+      return;
+    }
     try {
-      saveLifeProfile({ birthAt: new Date(String(value)).toISOString() });
-      notify("出生时间已保存，年龄会实时更新");
+      const solar = lunarToSolar(year, month, day, isLeap);
+      lunarPreview.textContent = solar
+        ? `${lunarDateLabel({ year, month, day, isLeap })} = ${solarDateLabel(solar)}`
+        : "这个农历日期不存在，请检查闰月或日期";
+      lunarPreview.classList.toggle("is-error", !solar);
+    } catch {
+      lunarPreview.textContent = "请选择有效的农历年月日";
+      lunarPreview.classList.add("is-error");
+    }
+  };
+
+  const setBirthCalendar = (next, focus = false) => {
+    profileForm.querySelectorAll("[data-birth-calendar]").forEach(button => {
+      button.setAttribute("aria-pressed", String(button.dataset.birthCalendar === next));
+    });
+    profileForm.querySelectorAll("[data-birth-panel]").forEach(panel => {
+      const active = panel.dataset.birthPanel === next;
+      panel.hidden = !active;
+      panel.querySelectorAll("input, select").forEach(control => {
+        control.disabled = !active;
+      });
+    });
+    if (next === "lunar") updateLunarPreview();
+    if (focus) {
+      const selector = next === "lunar" ? '[name="lunarYear"]' : "[name=birthAt]";
+      profileForm.querySelector(selector)?.focus({ preventScroll: true });
+    }
+  };
+
+  profileForm.querySelectorAll("[data-birth-calendar]").forEach(button => {
+    button.addEventListener("click", () => {
+      setBirthCalendar(button.dataset.birthCalendar, true);
+    });
+  });
+  ["lunarYear", "lunarMonth", "lunarDay", "lunarLeap"].forEach(name => {
+    profileForm.elements[name].addEventListener("change", updateLunarPreview);
+  });
+  updateLunarPreview();
+
+  profileForm.addEventListener("submit", event => {
+    event.preventDefault();
+    const calendar = profileForm.querySelector('[data-birth-calendar][aria-pressed="true"]')?.dataset.birthCalendar;
+    try {
+      if (calendar === "lunar") {
+        saveLifeProfile({
+          birthCalendar: "lunar",
+          lunarBirth: {
+            year: Number(profileForm.elements.lunarYear.value),
+            month: Number(profileForm.elements.lunarMonth.value),
+            day: Number(profileForm.elements.lunarDay.value),
+            isLeap: profileForm.elements.lunarLeap.checked,
+          },
+        });
+        notify("农历生日已保存，会按农历日期计算下一次生日");
+      } else {
+        const birth = new Date(String(profileForm.elements.birthAt.value));
+        if (!Number.isFinite(birth.getTime()) || birth > new Date()) {
+          throw new Error("请选择不晚于今天的公历出生日期和时间");
+        }
+        saveLifeProfile({ birthCalendar: "solar", birthAt: birth.toISOString() });
+        notify("公历生日已保存，年龄会实时更新");
+      }
       renderWellnessPage(root, options);
     } catch (error) {
       notify(error instanceof Error ? error.message : "出生时间保存失败");
     }
+  });
+
+  root.querySelectorAll("[data-weight-unit]").forEach(button => {
+    button.addEventListener("click", () => {
+      const next = button.dataset.weightUnit;
+      if (next === getWeightUnit()) return;
+      saveWeightUnit(next);
+      const scrollY = window.scrollY;
+      renderWellnessPage(root, options);
+      root.querySelector(`[data-weight-unit="${next}"]`)?.focus({ preventScroll: true });
+      window.scrollTo({ top: scrollY });
+    });
   });
 
   root.querySelector("#weight-form").addEventListener("submit", event => {
@@ -373,12 +655,17 @@ function renderWellnessPage(root, options = {}) {
     const form = event.currentTarget;
     const data = new FormData(form);
     try {
+      const unit = getWeightUnit();
+      const entered = Number(data.get("weight"));
+      if (!Number.isFinite(entered) || entered <= 0) {
+        throw new Error("请输入有效的体重");
+      }
       const record = saveWeight({
         at: new Date(String(data.get("at"))).toISOString(),
-        kg: data.get("kg"),
+        kg: entered / weightUnitFactor(unit),
         note: data.get("note"),
       });
-      notify(`已记录 ${record.kg.toFixed(1)} kg`);
+      notify(`已记录 ${weightDisplayText(record.kg, unit)} ${weightUnitName(unit)}`);
       renderWellnessPage(root, options);
     } catch (error) {
       notify(error instanceof Error ? error.message : "体重保存失败");
@@ -396,9 +683,10 @@ function renderWellnessPage(root, options = {}) {
     button.addEventListener("click", async () => {
       const item = listWeights().find(record => record.id === button.dataset.deleteWeight);
       if (!item) return;
+      const unit = getWeightUnit();
       const confirmed = await confirmAction(
         "删除这条体重记录？",
-        `${dateTimeLabel(item.at)} · ${item.kg.toFixed(1)} kg。删除后曲线会立即更新。`,
+        `${dateTimeLabel(item.at)} · ${weightDisplayText(item.kg, unit)} ${weightUnitName(unit)}。删除后曲线会立即更新。`,
       );
       if (!confirmed) return;
       try {

@@ -2,12 +2,14 @@ import { STOCK_STORAGE_KEY, mergeStockBackup, normalizeStockBackup, readStockDat
 
 export const LIFE_PROFILE_KEY = "daylog:life:profile:v1";
 export const LIFE_WEIGHTS_KEY = "daylog:life:weights:v1";
+export const LIFE_WEIGHT_UNIT_KEY = "daylog:life:weight-unit:v1";
 export const LIFE_LEDGER_KEY = "daylog:life:ledger:v1";
 export const LIFE_QUICK_LEDGER_KEY = "daylog:life:quick-ledger:v1";
 
 export const LIFE_STORAGE_KEYS = [
   LIFE_PROFILE_KEY,
   LIFE_WEIGHTS_KEY,
+  LIFE_WEIGHT_UNIT_KEY,
   LIFE_LEDGER_KEY,
   LIFE_QUICK_LEDGER_KEY,
   STOCK_STORAGE_KEY,
@@ -15,7 +17,38 @@ export const LIFE_STORAGE_KEYS = [
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 const LEDGER_TYPES = new Set(["income", "expense"]);
+const WEIGHT_UNITS = new Set(["kg", "jin"]);
 const MAX_QUICK_LEDGER = 20;
+const LUNAR_MONTH_NAMES = ["", "正月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "腊月"];
+const LUNAR_DAY_NAMES = ["", "初一", "初二", "初三", "初四", "初五", "初六", "初七", "初八", "初九", "初十", "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十", "廿一", "廿二", "廿三", "廿四", "廿五", "廿六", "廿七", "廿八", "廿九", "三十"];
+const LUNAR_MONTH_NUMBERS = new Map([
+  ["正月", 1],
+  ["一月", 1],
+  ["二月", 2],
+  ["三月", 3],
+  ["四月", 4],
+  ["五月", 5],
+  ["六月", 6],
+  ["七月", 7],
+  ["八月", 8],
+  ["九月", 9],
+  ["十月", 10],
+  ["十一月", 11],
+  ["冬月", 11],
+  ["十二月", 12],
+  ["腊月", 12],
+]);
+const lunarSolarCache = new Map();
+let lunarDateFormatter = null;
+try {
+  lunarDateFormatter = new Intl.DateTimeFormat("zh-CN-u-ca-chinese", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+} catch {
+  lunarDateFormatter = null;
+}
 
 function identifier(prefix) {
   const random = globalThis.crypto?.randomUUID?.()
@@ -35,6 +68,104 @@ function canonicalDate(value) {
   return Number.isFinite(date.getTime()) ? date.toISOString() : "";
 }
 
+function numberFromLunarPart(value, names) {
+  const numeric = Number(String(value || "").replace(/[^\d]/g, ""));
+  if (Number.isInteger(numeric) && numeric > 0) return numeric;
+  return names.indexOf(String(value || "").trim());
+}
+
+export function solarToLunar(value) {
+  if (!lunarDateFormatter) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  const parts = lunarDateFormatter.formatToParts(date);
+  const year = Number(parts.find(part => part.type === "relatedYear")?.value);
+  const rawMonth = parts.find(part => part.type === "month")?.value || "";
+  const isLeap = rawMonth.startsWith("闰");
+  const monthName = rawMonth.replace(/^闰/, "");
+  const month = LUNAR_MONTH_NUMBERS.get(monthName)
+    || numberFromLunarPart(monthName, LUNAR_MONTH_NAMES);
+  const dayText = parts.find(part => part.type === "day")?.value || "";
+  const day = numberFromLunarPart(dayText, LUNAR_DAY_NAMES);
+  if (!Number.isInteger(year) || !month || !day) return null;
+  return { year, month, day, isLeap };
+}
+
+function normalizeLunarBirth(value) {
+  const year = Number(value?.year);
+  const month = Number(value?.month);
+  const day = Number(value?.day);
+  const isLeap = Boolean(value?.isLeap);
+  if (
+    !Number.isInteger(year)
+    || year < 1900
+    || year > 2100
+    || !Number.isInteger(month)
+    || month < 1
+    || month > 12
+    || !Number.isInteger(day)
+    || day < 1
+    || day > 30
+  ) {
+    throw new Error("请选择有效的农历出生年月日");
+  }
+  return { year, month, day, isLeap };
+}
+
+export function lunarToSolar(yearValue, monthValue, dayValue, isLeapValue = false) {
+  const lunar = normalizeLunarBirth({
+    year: yearValue,
+    month: monthValue,
+    day: dayValue,
+    isLeap: isLeapValue,
+  });
+  const cacheKey = `${lunar.year}-${lunar.month}-${lunar.day}-${lunar.isLeap ? 1 : 0}`;
+  if (lunarSolarCache.has(cacheKey)) return lunarSolarCache.get(cacheKey);
+  const cursor = new Date(lunar.year, 0, 1, 12);
+  const end = new Date(lunar.year + 1, 2, 1, 12);
+  let match = null;
+  while (cursor < end) {
+    const current = solarToLunar(cursor);
+    if (
+      current?.year === lunar.year
+      && current.month === lunar.month
+      && current.day === lunar.day
+      && current.isLeap === lunar.isLeap
+    ) {
+      match = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate());
+      break;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  lunarSolarCache.set(cacheKey, match);
+  return match;
+}
+
+export function lunarDateLabel(value) {
+  let lunar = null;
+  try {
+    lunar = normalizeLunarBirth(value);
+  } catch {
+    return "";
+  }
+  return `农历${lunar.isLeap ? "闰" : ""}${LUNAR_MONTH_NAMES[lunar.month]}${LUNAR_DAY_NAMES[lunar.day]}`;
+}
+
+export function weightUnitFactor(unit = getWeightUnit()) {
+  return unit === "jin" ? 2 : 1;
+}
+
+export function getWeightUnit() {
+  const unit = localStorage.getItem(LIFE_WEIGHT_UNIT_KEY);
+  return WEIGHT_UNITS.has(unit) ? unit : "kg";
+}
+
+export function saveWeightUnit(unit) {
+  const next = WEIGHT_UNITS.has(unit) ? unit : "kg";
+  localStorage.setItem(LIFE_WEIGHT_UNIT_KEY, next);
+  return next;
+}
+
 function readArray(key) {
   try {
     const parsed = JSON.parse(localStorage.getItem(key) || "[]");
@@ -50,10 +181,25 @@ function writeArray(key, values) {
 
 function normalizeProfile(value) {
   if (!value || typeof value !== "object") return null;
-  const birthAt = canonicalDate(value.birthAt);
+  const birthCalendar = value.birthCalendar === "lunar" ? "lunar" : "solar";
+  const lunarBirth = birthCalendar === "lunar"
+    ? (() => {
+        try {
+          return normalizeLunarBirth(value.lunarBirth);
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+  if (birthCalendar === "lunar" && !lunarBirth) return null;
+  const birthAt = birthCalendar === "lunar"
+    ? lunarToSolar(lunarBirth.year, lunarBirth.month, lunarBirth.day, lunarBirth.isLeap)?.toISOString() || ""
+    : canonicalDate(value.birthAt);
   if (!birthAt) return null;
   return {
     birthAt,
+    birthCalendar,
+    lunarBirth,
     updatedAt: canonicalDate(value.updatedAt) || new Date().toISOString(),
   };
 }
@@ -70,7 +216,9 @@ function normalizeWeight(value) {
   return {
     id: String(value.id),
     at,
-    kg: Math.round(kg * 10) / 10,
+    // Keep kilogram precision below the interface so two-decimal jin values
+    // can round-trip exactly when the user switches units.
+    kg: Math.round(kg * 1000) / 1000,
     note: cleanText(value.note, 300),
     createdAt: canonicalDate(value.createdAt) || at,
     updatedAt: canonicalDate(value.updatedAt) || canonicalDate(value.createdAt) || at,
@@ -158,11 +306,32 @@ export function getLifeProfile() {
 }
 
 export function saveLifeProfile(input) {
+  let birthAt = input?.birthAt;
+  if (input?.birthCalendar === "lunar") {
+    const lunarBirth = normalizeLunarBirth(input?.lunarBirth);
+    const solarBirth = lunarToSolar(
+      lunarBirth.year,
+      lunarBirth.month,
+      lunarBirth.day,
+      lunarBirth.isLeap,
+    );
+    if (!solarBirth) {
+      throw new Error(lunarBirth.isLeap
+        ? "这一农历年份没有该闰月，请核对月份"
+        : "请选择有效的农历出生年月日");
+    }
+    birthAt = solarBirth.toISOString();
+  }
   const profile = normalizeProfile({
-    birthAt: input?.birthAt,
+    birthAt,
+    birthCalendar: input?.birthCalendar,
+    lunarBirth: input?.lunarBirth,
     updatedAt: new Date().toISOString(),
   });
   if (!profile) throw new Error("请选择有效的出生日期和时间");
+  if (new Date(profile.birthAt) > new Date()) {
+    throw new Error("出生日期不能晚于今天");
+  }
   localStorage.setItem(LIFE_PROFILE_KEY, JSON.stringify(profile));
   return profile;
 }
@@ -302,6 +471,11 @@ export function normaliseLifeBackup(value) {
   return {
     version: 1,
     profile: normalizeProfile(value.profile),
+    preferences: {
+      weightUnit: WEIGHT_UNITS.has(value.preferences?.weightUnit)
+        ? value.preferences.weightUnit
+        : "kg",
+    },
     weights: value.weights.map(normalizeWeight),
     ledger: value.ledger.map(normalizeLedger),
     quickLedger: Array.isArray(value.quickLedger)
@@ -315,6 +489,9 @@ export function getLifeBackupData() {
   return normaliseLifeBackup({
     version: 1,
     profile: getLifeProfile(),
+    preferences: {
+      weightUnit: getWeightUnit(),
+    },
     weights: listWeights(),
     ledger: listLedger(),
     quickLedger: listQuickLedger(),
@@ -345,6 +522,7 @@ export function restoreLifeStorage(snapshot) {
 }
 
 export function mergeLifeBackup(value) {
+  const hasIncomingWeightUnit = WEIGHT_UNITS.has(value?.preferences?.weightUnit);
   const incoming = normaliseLifeBackup(value);
   const stockTradesAdded = mergeStockBackup(incoming.stock);
   const currentProfile = getLifeProfile();
@@ -354,6 +532,9 @@ export function mergeLifeBackup(value) {
     && (!currentProfile || incomingProfile.updatedAt > currentProfile.updatedAt)
   ) {
     localStorage.setItem(LIFE_PROFILE_KEY, JSON.stringify(incomingProfile));
+  }
+  if (hasIncomingWeightUnit) {
+    saveWeightUnit(incoming.preferences.weightUnit);
   }
 
   const currentWeights = listWeights();
