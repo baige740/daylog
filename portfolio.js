@@ -15,7 +15,7 @@ const tradeDate = new Intl.DateTimeFormat("zh-CN", {
   year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
 });
 const historyStep = 40;
-const selected = { account: "", symbol: "", limit: historyStep };
+const selected = { account: "", historyAccount: "", symbol: "", limit: historyStep };
 let refreshing = false;
 let updateCurrentPage;
 
@@ -59,11 +59,11 @@ function holdingMarkup(position, index) {
   const rate = floating !== null && cost ? floating / cost * 100 : null;
   const floatingText = rate === null ? "" : `${rate > 0 ? "+" : ""}${rate.toFixed(2)}%`;
   const quoteInfo = quote
-    ? `${quote.source === "manual" ? "手动估价" : "腾讯行情"} · ${quoteDate.format(new Date(quote.asOf))}（北京时间）`
-    : "暂无报价";
+    ? `<span>${quote.source === "manual" ? "手动估价" : "腾讯行情"} · 北京时间</span><time datetime="${quote.asOf}">${quoteDate.format(new Date(quote.asOf))}</time>`
+    : "<span>暂无报价</span>";
   return `<article class="stock-holding" data-stock-symbol="${symbol}">
-    <header><div><h3>${esc(stockTitle(position))}</h3><p>${symbol.toUpperCase()} · ${esc(position.account)}</p></div>
-      <div class="stock-current"><strong>${quote ? `¥${priceFormat.format(quote.price)}` : "—"}</strong><span>${quoteInfo}</span></div></header>
+    <header><div class="stock-identity"><h3>${esc(stockTitle(position))}</h3><p>${symbol.toUpperCase()}</p><p>${esc(position.account)}</p></div>
+      <div class="stock-current"><strong>${quote ? `¥${priceFormat.format(quote.price)}` : "—"}</strong>${quoteInfo}</div></header>
     <dl class="stock-holding-metrics">
       ${metric("股数 / 份数", countFormat.format(shares))}${metric("每股成本", `¥${priceFormat.format(average)}`)}
       ${metric("市值", money(market))}${metric("浮动盈亏", money(floating, true), tone(floating), floatingText)}
@@ -139,6 +139,7 @@ export function renderPortfolioPage(root, { notify, confirmAction }) {
     <section class="stock-section" aria-labelledby="stock-history-title">
       <div class="stock-panel-head"><h2 id="stock-history-title" tabindex="-1">交易流水 <small id="stock-history-count"></small></h2>
         <label><span class="sr-only">按股票筛选交易流水</span><select id="stock-symbol"></select></label></div>
+      <button type="button" class="life-soft-button stock-history-scope" data-stock-action="clear-history-account" hidden><span></span>${icon("x")}</button>
       <div class="stock-entries" id="stock-history"></div>
       <button type="button" class="life-soft-button stock-more" data-stock-action="more" hidden>查看更多</button>
     </section>
@@ -150,6 +151,7 @@ export function renderPortfolioPage(root, { notify, confirmAction }) {
   const $ = selector => root.querySelector(selector);
   const accountFilter = $("#stock-account");
   const symbolFilter = $("#stock-symbol");
+  const historyScope = $('[data-stock-action="clear-history-account"]');
   const refresh = $('[data-stock-action="refresh"]');
   const status = $("#stock-status");
   const dialog = $(".stock-dialog");
@@ -168,9 +170,14 @@ export function renderPortfolioPage(root, { notify, confirmAction }) {
       .sort((a, b) => (b.market ?? b.cost) - (a.market ?? a.cost) || a.symbol.localeCompare(b.symbol));
     const names = new Map(positions.map(position => [position.symbol, position.name]));
     if (!names.has(selected.symbol)) selected.symbol = "";
+    if (!positions.some(position => position.symbol === selected.symbol && position.account === selected.historyAccount)) selected.historyAccount = "";
     accountFilter.innerHTML = options([["", "全部账户"], ...accounts.map(account => [account, account])], selected.account);
-    symbolFilter.innerHTML = options([["", "全部股票"], ...[...names].sort().map(([symbol, name]) => [symbol, `${name ? `${name} ` : ""}${symbol.slice(2)}`])], selected.symbol);
-    entries = calculated.entries.filter(item => (!selected.account || item.account === selected.account) && (!selected.symbol || item.symbol === selected.symbol));
+    symbolFilter.innerHTML = options([["", "全部股票"], ...[...names].sort().map(([symbol, name]) => [symbol, `${symbol.slice(2)}${name ? ` · ${name}` : ""}`])], selected.symbol);
+    const historyAccount = selected.account || selected.historyAccount;
+    historyScope.hidden = !selected.historyAccount || Boolean(selected.account);
+    historyScope.querySelector("span").textContent = `流水仅看 ${selected.historyAccount}`;
+    historyScope.setAttribute("aria-label", `清除流水账户筛选 ${selected.historyAccount}`);
+    entries = calculated.entries.filter(item => (!historyAccount || item.account === historyAccount) && (!selected.symbol || item.symbol === selected.symbol));
     $("#stock-summary").innerHTML = summaryMarkup(positions, holdings);
     $("#stock-holdings-count").textContent = `${holdings.length} 项`;
     $("#stock-holdings").innerHTML = holdings.length ? holdings.map(holdingMarkup).join("")
@@ -187,7 +194,7 @@ export function renderPortfolioPage(root, { notify, confirmAction }) {
     const value = name => esc(item?.[name] ?? "");
     draftOrigin = origin;
     $("#stock-dialog-title").textContent = manual ? `手动估价 · ${stockTitle(item)}` : edit ? "编辑交易" : type === "opening" ? "补录已有持仓" : "记一笔交易";
-    $("#stock-form-body").innerHTML = `<form class="stock-form" autocomplete="off">
+    $("#stock-form-body").innerHTML = `<form class="stock-form" autocomplete="off"><div class="stock-form-fields">
       ${manual ? `<p>输入 ${item.symbol.toUpperCase()} 的参考价格。这个价格会用于该股票在各账户的市值计算。</p>
         <label class="stock-wide">每股参考价（元）<input name="price" type="number" step="0.0001" min="0.0001" max="1000000" inputmode="decimal" value="${item.quote?.price ?? ""}" required></label>` : `
         <label>交易类型<select name="type">${options(Object.entries(STOCK_TYPES), type)}</select></label>
@@ -201,7 +208,7 @@ export function renderPortfolioPage(root, { notify, confirmAction }) {
         <label class="stock-wide" data-stock-share>手续费（元，选填）<input name="fee" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00" value="${edit && item.fee ? item.fee : ""}"></label>
         <label class="stock-wide" data-stock-dividend>实际到账分红（元）<input name="amount" type="number" step="0.01" min="0.01" inputmode="decimal" value="${edit && item.amount ? item.amount : ""}"></label>
         <label class="stock-wide">备注（选填）<textarea name="note" rows="2" maxlength="500">${value("note")}</textarea></label>`}
-      <div class="stock-form-error stock-wide" role="alert" hidden></div><div class="stock-form-actions stock-wide">
+      <div class="stock-form-error stock-wide" role="alert" hidden></div></div><div class="stock-form-actions">
         <button class="secondary" type="button" data-stock-action="close">取消</button><button class="primary" type="submit">保存</button></div></form>`;
     const form = $(".stock-form");
     const fields = form.elements;
@@ -233,8 +240,8 @@ export function renderPortfolioPage(root, { notify, confirmAction }) {
         } else {
           const at = edit && values.at === localDateTime(item.at) ? item.at : new Date(values.at).toISOString();
           const saved = saveStockTrade({ ...values, id: edit ? item.id : undefined, at });
-          if (selected.account && selected.account !== saved.account) selected.account = saved.account;
-          if (selected.symbol && selected.symbol !== saved.symbol) selected.symbol = saved.symbol;
+          if (edit && selected.historyAccount === item.account) selected.historyAccount = saved.account;
+          if (edit && selected.symbol === item.symbol) selected.symbol = saved.symbol;
         }
         dialog.close();
         update();
@@ -243,15 +250,29 @@ export function renderPortfolioPage(root, { notify, confirmAction }) {
         const message = $(".stock-form-error");
         message.textContent = error.message;
         message.hidden = false;
+        message.scrollIntoView({ block: "nearest" });
       }
     };
     dialog.showModal();
+    fitDialog();
+    window.visualViewport?.addEventListener("resize", fitDialog);
+    window.visualViewport?.addEventListener("scroll", fitDialog);
     (manual || item?.symbol ? (fields.price.disabled ? fields.amount : fields.price) : fields.symbol).focus();
   }
 
-  accountFilter.onchange = () => { selected.account = accountFilter.value; selected.symbol = ""; selected.limit = historyStep; status.textContent = ""; update(); };
-  symbolFilter.onchange = () => { selected.symbol = symbolFilter.value; selected.limit = historyStep; update(); };
+  function fitDialog() {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    dialog.style.setProperty("--stock-viewport-top", `${viewport.offsetTop}px`);
+    dialog.style.setProperty("--stock-viewport-bottom", `${Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)}px`);
+    dialog.style.setProperty("--stock-viewport-height", `${viewport.height}px`);
+  }
+
+  accountFilter.onchange = () => { selected.account = accountFilter.value; selected.historyAccount = ""; selected.symbol = ""; selected.limit = historyStep; status.textContent = ""; update(); };
+  symbolFilter.onchange = () => { selected.symbol = symbolFilter.value; selected.historyAccount = ""; selected.limit = historyStep; update(); };
   dialog.addEventListener("close", () => {
+    window.visualViewport?.removeEventListener("resize", fitDialog);
+    window.visualViewport?.removeEventListener("scroll", fitDialog);
     if (draftOrigin?.isConnected) draftOrigin.focus();
     else if (!root.hidden) $('[data-stock-action="new"]').focus({ preventScroll: true });
   });
@@ -270,12 +291,17 @@ export function renderPortfolioPage(root, { notify, confirmAction }) {
       try { deleteStockTrade(entry.id); update(); notify("已删除交易"); }
       catch (error) { notify(error.message); }
     } else if (action === "history" && position) {
-      selected.account = position.account;
+      selected.historyAccount = position.account;
       selected.symbol = position.symbol;
       selected.limit = historyStep;
       update();
       $("#stock-history-title").focus({ preventScroll: true });
       $("#stock-history-title").scrollIntoView({ block: "start" });
+    } else if (action === "clear-history-account") {
+      selected.historyAccount = "";
+      selected.limit = historyStep;
+      update();
+      symbolFilter.focus({ preventScroll: true });
     } else if (action === "more") {
       selected.limit += historyStep;
       update();
